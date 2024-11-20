@@ -33,11 +33,11 @@ docker run -d \
   --restart unless-stopped \
   --gpus all \
   -p 8081:8081 \
-  -e TZ=America/Los_Angeles \ # Add your timezone
+  -e TZ=America/Los_Angeles \
   -v /etc/localtime:/etc/localtime:ro \
   ghcr.io/bigsk1/gpu-monitor:latest
 ```
-
+Note: Update your timezone to use the correct time
 ### Using Docker Compose
 
 1. Clone the repository:
@@ -96,7 +96,7 @@ docker run -d \
   --restart unless-stopped \
   --gpus all \
   -p 8081:8081 \
-  -e TZ=America/Los_Angeles \ # Add you timezone
+  -e TZ=America/Los_Angeles \
   -v /etc/localtime:/etc/localtime:ro \
   gpu-monitor
 ```
