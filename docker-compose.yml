@@ -1,0 +1,17 @@
+services:
+  gpu-monitor:
+    build: .
+    container_name: gpu-monitor
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./logs:/app/logs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    runtime: nvidia

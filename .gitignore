@@ -1,0 +1,19 @@
+# Logs and data
+logs/
+data/
+*.log
+
+# Environment
+.env
+
+# Docker
+.docker/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+
+# System files
+.DS_Store
+Thumbs.db

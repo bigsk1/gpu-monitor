@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>GPU Monitor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <style>
+        :root {
+            --primary: #2196f3;
+            --success: #4caf50;
+            --warning: #ffc107;
+            --danger: #f44336;
+            --bg-dark: #0a1929;
+            --bg-card: #132f4c;
+            --text-primary: #ffffff;
+            --text-secondary: #b2bac2;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            line-height: 1.5;
+            padding: 2rem;
+        }
+
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--primary);
+        }
+
+        .header p {
+            color: var(--text-secondary);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .metric-card {
+            text-align: center;
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-range {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        .gauge {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .gauge-fill {
+            height: 100%;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+
+        .timeframe-selector {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .timeframe-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--primary);
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .timeframe-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .timeframe-btn:hover {
+            background: var(--primary);
+            opacity: 0.8;
+        }
+
+        .performance-indicators {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .chart-container {
+            height: 300px;
+            margin-top: 1rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        th {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .success { background: var(--success); }
+        .warning { background: var(--warning); }
+        .danger { background: var(--danger); }
+
+        tr {
+            transition: background-color 0.3s ease;
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+            
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <header class="header">
+            <h1 id="gpuTitle">GPU Monitor</h1>
+            <p>Real-time performance metrics and statistics</p>
+        </header>
+
+        <!-- 24-Hour Statistics -->
+        <div class="card">
+            <h2>24-Hour Statistics</h2>
+            <div class="stats-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Temperature Range</div>
+                    <div class="metric-value" id="temp-current">--°C</div>
+                    <div class="stat-range">
+                        <span id="temp-low">Low: --°C</span>
+                        <span id="temp-high">High: --°C</span>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">GPU Utilization Range</div>
+                    <div class="metric-value" id="util-current">--%</div>
+                    <div class="stat-range">
+                        <span id="util-low">Low: --%</span>
+                        <span id="util-high">High: --%</span>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Memory Usage Range</div>
+                    <div class="metric-value" id="mem-current">-- MiB</div>
+                    <div class="stat-range">
+                        <span id="mem-low">Low: -- MiB</span>
+                        <span id="mem-high">High: -- MiB</span>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Power Usage Range</div>
+                    <div class="metric-value" id="power-current">-- W</div>
+                    <div class="stat-range">
+                        <span id="power-low">Low: -- W</span>
+                        <span id="power-high">High: -- W</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+<!-- Performance History -->
+<div class="card">
+    <h2>Performance History</h2>
+    <div class="timeframe-selector">
+        <button class="timeframe-btn active" data-hours="1">1 Hour</button>
+        <button class="timeframe-btn" data-hours="6">6 Hours</button>
+        <button class="timeframe-btn" data-hours="12">12 Hours</button>
+        <button class="timeframe-btn" data-hours="24">24 Hours</button>
+    </div>
+    <div class="performance-indicators">
+        <div>Peak Temperature: <span id="peak-temp">--°C</span></div>
+        <div>Avg Utilization: <span id="avg-util">--%</span></div>
+        <div>Max Memory: <span id="max-mem">-- MiB</span></div>
+        <div>Power Efficiency: <span id="power-efficiency">-- W/%</span></div>
+    </div>
+    <div class="chart-container">
+        <canvas id="historyChart"></canvas>
+    </div>
+</div>
+
+<!-- Current Metrics -->
+<div class="grid">
+    <div class="card metric-card">
+        <div class="metric-label">Temperature</div>
+        <div class="metric-value" id="temp-value">--°C</div>
+        <div class="gauge">
+            <div class="gauge-fill" id="temp-gauge"></div>
+        </div>
+    </div>
+
+    <div class="card metric-card">
+        <div class="metric-label">GPU Utilization</div>
+        <div class="metric-value" id="util-value">--%</div>
+        <div class="gauge">
+            <div class="gauge-fill" id="util-gauge"></div>
+        </div>
+    </div>
+
+    <div class="card metric-card">
+        <div class="metric-label">Memory Usage</div>
+        <div class="metric-value" id="mem-value">-- MiB</div>
+        <div class="gauge">
+            <div class="gauge-fill" id="mem-gauge"></div>
+        </div>
+    </div>
+
+    <div class="card metric-card">
+        <div class="metric-label">Power Usage</div>
+        <div class="metric-value" id="power-value">-- W</div>
+        <div class="gauge">
+            <div class="gauge-fill" id="power-gauge"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Statistics -->
+<div class="card">
+    <h2>Recent Statistics</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Temperature</th>
+                <th>GPU Usage</th>
+                <th>Memory</th>
+                <th>Power</th>
+            </tr>
+        </thead>
+        <tbody id="stats-table-body"></tbody>
+    </table>
+</div>
+</div>
+<script>
+    // Function to update GPU name
+    function updateGPUName() {
+        fetch('gpu_config.json')
+            .then(response => response.json())
+            .then(config => {
+                const gpuTitle = document.getElementById('gpuTitle');
+                const pageTitle = document.querySelector('title');
+                gpuTitle.textContent = config.gpu_name;
+                pageTitle.textContent = config.gpu_name + ' Monitor';
+            })
+            .catch(error => console.error('Error loading GPU config:', error));
+    }
+
+    // Call this at startup
+    updateGPUName();
+
+    // Initialize Chart.js
+    const ctx = document.getElementById('historyChart').getContext('2d');
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Temperature (°C)',
+                borderColor: '#f44336',
+                data: [],
+                tension: 0.4,
+                fill: false
+            }, {
+                label: 'GPU Usage (%)',
+                borderColor: '#4caf50',
+                data: [],
+                tension: 0.4,
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                duration: 750,
+                easing: 'easeInOutQuart'
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        color: '#b2bac2'
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        color: '#b2bac2'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#b2bac2'
+                    }
+                }
+            }
+        }
+    });
+
+    // Historical data storage
+    let historyData = {
+        timestamps: [],
+        temperatures: [],
+        utilizations: []
+    };
+
+    // Add this after the historyData declaration
+    let selectedTimeframe = 1; // Default to 1 hour
+
+    function updateGaugeColor(value, element, max = 100) {
+        const percentage = (value / max) * 100;
+        let colorClass = 'success';
+        if (percentage > 70) colorClass = 'danger';
+        else if (percentage > 50) colorClass = 'warning';
+        
+        element.className = 'gauge-fill ' + colorClass;
+        element.style.width = Math.min(percentage, 100) + '%';
+    }
+
+    function updateRangeStats(stats) {
+        if (!stats) return;
+
+        // Update temperature ranges
+        const temp = stats.temperature || {};
+        document.getElementById('temp-low').textContent = `Low: ${temp.min || '--'}°C`;
+        document.getElementById('temp-high').textContent = `High: ${temp.max || '--'}°C`;
+        
+        // Update utilization ranges
+        const util = stats.utilization || {};
+        document.getElementById('util-low').textContent = `Low: ${util.min || '--'}%`;
+        document.getElementById('util-high').textContent = `High: ${util.max || '--'}%`;
+        
+        // Update memory ranges
+        const mem = stats.memory || {};
+        document.getElementById('mem-low').textContent = `Low: ${mem.min || '--'} MiB`;
+        document.getElementById('mem-high').textContent = `High: ${mem.max || '--'} MiB`;
+        
+        // Update power ranges
+        const power = stats.power || {};
+        document.getElementById('power-low').textContent = `Low: ${power.min || '--'} W`;
+        document.getElementById('power-high').textContent = `High: ${power.max || '--'} W`;
+    }
+
+    function updateChartForTimeframe(hours) {
+        fetch(`history/history_${hours}h.json`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data || !data.timestamps || data.timestamps.length === 0) {
+                    console.warn(`No data available for ${hours}h timeframe`);
+                    return;
+                }
+    
+                // Update chart with timeframe data
+                chart.data.labels = data.timestamps;
+                chart.data.datasets[0].data = data.temperatures;
+                chart.data.datasets[1].data = data.utilizations;
+                chart.update();
+    
+                // Update performance indicators
+                document.getElementById('peak-temp').textContent = 
+                    `${Math.max(...data.temperatures)}°C`;
+                document.getElementById('avg-util').textContent = 
+                    `${(data.utilizations.reduce((a, b) => a + b, 0) / data.utilizations.length).toFixed(1)}%`;
+                document.getElementById('max-mem').textContent = 
+                    `${Math.max(...data.memory)} MiB`;
+                
+                const avgPower = data.power.reduce((a, b) => a + b, 0) / data.power.length;
+                const avgUtil = data.utilizations.reduce((a, b) => a + b, 0) / data.utilizations.length || 1;
+                document.getElementById('power-efficiency').textContent = 
+                    `${(avgPower / avgUtil).toFixed(1)} W/%`;
+            })
+            .catch(error => {
+                console.error(`Error loading ${hours}h historical data:`, error);
+            });
+    }
+
+    function updateTimeframeStats(data) {
+        const temps = historyData.temperatures;
+        const utils = historyData.utilizations;
+        
+        if (temps.length > 0) {
+            document.getElementById('peak-temp').textContent = `${Math.max(...temps)}°C`;
+            document.getElementById('avg-util').textContent = 
+                `${(utils.reduce((a, b) => a + b, 0) / utils.length).toFixed(1)}%`;
+        }
+
+        document.getElementById('max-mem').textContent = `${data.memory} MiB`;
+        
+        const avgPower = data.power;
+        const avgUtil = data.utilization || 1;
+        document.getElementById('power-efficiency').textContent = 
+            `${(avgPower / avgUtil).toFixed(1)} W/%`;
+    }
+
+    function smoothlyUpdateText(element, newValue, unit = '') {
+        if (element) {
+            element.textContent = `${Number(newValue).toFixed(1)}${unit}`;
+        }
+    }
+
+    function updateStats() {
+        Promise.all([
+            fetch('gpu_current_stats.json'),
+            fetch('gpu_24hr_stats.txt').catch(() => ({ text: () => '{}' }))
+        ])
+        .then(([currentResponse, statsResponse]) => 
+            Promise.all([currentResponse.json(), statsResponse.text()])
+        )
+        .then(([currentData, statsText]) => {
+            // Update current metrics
+            smoothlyUpdateText(document.getElementById('temp-value'), currentData.temperature, '°C');
+            smoothlyUpdateText(document.getElementById('util-value'), currentData.utilization, '%');
+            smoothlyUpdateText(document.getElementById('mem-value'), currentData.memory, ' MiB');
+            smoothlyUpdateText(document.getElementById('power-value'), currentData.power, ' W');
+    
+            // Update current values in range displays
+            smoothlyUpdateText(document.getElementById('temp-current'), currentData.temperature, '°C');
+            smoothlyUpdateText(document.getElementById('util-current'), currentData.utilization, '%');
+            smoothlyUpdateText(document.getElementById('mem-current'), currentData.memory, ' MiB');
+            smoothlyUpdateText(document.getElementById('power-current'), currentData.power, ' W');
+    
+            // Update gauges
+            updateGaugeColor(currentData.temperature, document.getElementById('temp-gauge'), 100);
+            updateGaugeColor(currentData.utilization, document.getElementById('util-gauge'), 100);
+            updateGaugeColor(currentData.memory, document.getElementById('mem-gauge'), 24576);
+            updateGaugeColor(currentData.power, document.getElementById('power-gauge'), 250);
+    
+            // Update table
+            const tbody = document.getElementById('stats-table-body');
+            const existingFirstRow = tbody.firstElementChild;
+            const existingTimestamp = existingFirstRow ? existingFirstRow.cells[0].textContent : null;
+
+            // Only add new row if timestamp is different
+            if (!existingTimestamp || existingTimestamp !== currentData.timestamp) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${currentData.timestamp}</td>
+                    <td>${currentData.temperature.toFixed(1)}°C</td>
+                    <td>${currentData.utilization}%</td>
+                    <td>${currentData.memory} MiB</td>
+                    <td>${currentData.power.toFixed(2)} W</td>
+                `;
+
+                tbody.insertBefore(row, tbody.firstChild);
+                
+                // Keep only last 10 unique entries
+                while (tbody.children.length > 10) {
+                    tbody.removeChild(tbody.lastChild);
+                }
+            }
+    
+            // Parse and update 24-hour statistics
+            try {
+                const stats = JSON.parse(statsText);
+                updateRangeStats(stats.stats);
+            } catch (e) {
+                console.error('Error parsing 24hr stats:', e);
+            }
+        })
+        .catch(error => console.error('Error updating stats:', error));
+    }
+    
+    // Separate function to update the chart
+    function updateChart() {
+        updateChartForTimeframe(selectedTimeframe);
+    }
+    
+    // Start updates
+    updateStats();
+    setInterval(updateStats, 5000);
+    // Update chart less frequently
+    setInterval(updateChart, 30000);
+
+     // Initialize timeframe selector
+    document.querySelectorAll('.timeframe-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            document.querySelectorAll('.timeframe-btn').forEach(b => 
+                b.classList.remove('active'));
+            button.classList.add('active');
+            selectedTimeframe = parseInt(button.dataset.hours);
+            updateChartForTimeframe(selectedTimeframe);
+        });
+    });
+
+    // Start updates
+    updateStats();
+    setInterval(updateStats, 5000);
+</script>
+</body>
+</html>
