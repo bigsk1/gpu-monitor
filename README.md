@@ -104,6 +104,11 @@ docker run -d \
 
 The dashboard is accessible at `http://localhost:8081/gpu_stats.html` by default. To change the port, modify the `docker-compose.yml` file or the `-p` parameter in the docker run command.
 
+--- 
+
+![GPU Monitor Dashboard](images/gpu2.jpg)
+
+
 ## Development
 
 ### Project Structure
@@ -137,6 +142,23 @@ A setup script is provided for convenience. It checks prerequisites and manages 
 # View logs
 ./setup.sh logs
 ```
+
+Example of starting and building a container
+```bash
+user@ai:~/gpu-monitor$ ./setup.sh start
+[+] Checking prerequisites...
+[+] Docker: Found
+[+] Docker Compose: Found
+[+] NVIDIA Docker Runtime: Found
+[+] NVIDIA GPU: Found
+[+] Starting GPU Monitor...
+Creating network "gpu-monitor_default" with the default driver
+Creating gpu-monitor ... done
+[+] GPU Monitor started successfully!
+[+] Dashboard available at: http://localhost:8081/gpu_stats.html
+[+] To check logs: docker-compose logs -f
+```
+
 
 ## Data Persistence
 
