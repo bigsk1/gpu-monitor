@@ -3,7 +3,7 @@
 
 # Nvidia GPU Dashboard
 
-A real-time NVIDIA GPU monitoring dashboard with a web interface. Built with Docker for easy deployment and cross-platform compatibility.
+A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deployment and cross-platform compatibility.
 
 ![GPU Monitor Dashboard](images/monitor.jpg)
 
@@ -21,7 +21,7 @@ A real-time NVIDIA GPU monitoring dashboard with a web interface. Built with Doc
 
 - Docker
 - NVIDIA GPU with drivers installed
-- NVIDIA Container Toolkit (nvidia-docker2)
+- NVIDIA Container Toolkit
 
 ## Quick Start
 
@@ -128,7 +128,7 @@ gpu-monitor/
 └── .gitignore
 ```
 
-## Alternative Setup Method
+## Alternative Setup Method (linux)
 
 A setup script is provided for convenience. It checks prerequisites and manages the service:
 
