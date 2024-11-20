@@ -25,13 +25,16 @@ A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deploymen
 
 ## Quick Start
 
-### Using Pre-built Image
+### Using Pre-built Image Docker Run
+
 ```bash
 docker run -d \
   --name gpu-monitor \
   --restart unless-stopped \
   --gpus all \
   -p 8081:8081 \
+  -e TZ=America/Los_Angeles \ # Add your timezone
+  -v /etc/localtime:/etc/localtime:ro \
   ghcr.io/bigsk1/gpu-monitor:latest
 ```
 
@@ -50,16 +53,6 @@ docker-compose up -d
 
 3. Access the dashboard at: `http://localhost:8081/gpu_stats.html`
 
-### Using Docker Run
-
-```bash
-docker run -d \
-  --name gpu-monitor \
-  --restart unless-stopped \
-  --gpus all \
-  -p 8081:8081 \
-  bigsk1/gpu-monitor
-```
 
 ## Installation Prerequisites
 
@@ -103,6 +96,8 @@ docker run -d \
   --restart unless-stopped \
   --gpus all \
   -p 8081:8081 \
+  -e TZ=America/Los_Angeles \ # Add you timezone
+  -v /etc/localtime:/etc/localtime:ro \
   gpu-monitor
 ```
 
@@ -196,6 +191,18 @@ services:
    - Verify container is running: `docker ps`
    - Check container logs: `docker logs gpu-monitor`
    - Ensure port 8081 is not in use
+4. **Timezone is off**
+
+  Note: Replace America/Los_Angeles with your timezone if different. Common timezones:
+
+US Eastern: America/New_York
+
+US Central: America/Chicago
+
+US Mountain: America/Denver
+
+US Pacific: America/Los_Angeles
+
 
 ## License
 
