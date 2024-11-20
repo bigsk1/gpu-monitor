@@ -25,11 +25,17 @@ A real-time NVIDIA GPU monitoring dashboard with a web interface. Built with Doc
 
 ## Quick Start
 
+### Using Pre-built Image
 ```bash
-./setup.sh start
+docker run -d \
+  --name gpu-monitor \
+  --restart unless-stopped \
+  --gpus all \
+  -p 8081:8081 \
+  ghcr.io/bigsk1/gpu-monitor:latest
 ```
 
-### Using Docker Compose (Recommended)
+### Using Docker Compose
 
 1. Clone the repository:
 ```bash
