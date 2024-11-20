@@ -5,7 +5,7 @@
 
 A real-time NVIDIA GPU monitoring dashboard with a web interface. Built with Docker for easy deployment and cross-platform compatibility.
 
-![GPU Monitor Dashboard](images/gpu-monitor.jpg)
+![GPU Monitor Dashboard](images/monitor.jpg)
 
 ## Features
 
@@ -14,6 +14,7 @@ A real-time NVIDIA GPU monitoring dashboard with a web interface. Built with Doc
 - Historical data tracking (1h, 6h, 12h, 24h)
 - Temperature, utilization, memory, and power monitoring
 - Docker-based for easy deployment
+- Your GPU name shown in UI
 
 
 ## Prerequisites
