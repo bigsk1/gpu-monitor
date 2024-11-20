@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  FRONTEND_IMAGE_NAME: ${{ github.repository }}-frontend
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push-image:
@@ -22,17 +22,17 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Log in to the Container registry
-        uses: login-action@v2
+        uses: docker/login-action@v2
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Frontend
-        id: meta-frontend
-        uses: metadata-action@v4
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=sha,prefix={{branch}}-
             type=ref,event=branch
@@ -41,10 +41,10 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
-        uses: build-push-action@v4
+        uses: docker/build-push-action@v4
         with:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ steps.meta-frontend.outputs.tags }}
-          labels: ${{ steps.meta-frontend.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
