@@ -1,11 +1,13 @@
+version: '3'
 services:
   gpu-monitor:
     build: .
     container_name: gpu-monitor
     ports:
       - "8081:8081"
+    environment:
+      - TZ=America/Los_Angeles   # update your timezone
     volumes:
-      - ./logs:/app/logs
       - /etc/localtime:/etc/localtime:ro  # Share host timezone
     deploy:
       resources:
