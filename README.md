@@ -5,7 +5,7 @@
 
 A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deployment and cross-platform compatibility.
 
-![GPU Monitor Dashboard](images/monitor.jpg)
+![GPU Monitor Dashboard](images/nvidia.jpg)
 
 ## Features
 
@@ -16,6 +16,8 @@ A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deploymen
 - Docker-based for easy deployment
 - Your GPU name shown in UI
 - Persist history between new containers
+- Real time alerts - sound and notification
+- Responsive theme for any size screen
 
 
 ## Prerequisites
@@ -162,6 +164,22 @@ services:
       - ./history:/app/history    # Persist historical data
       - ./logs:/app/logs    # Persist logs
 ```
+
+## Alerts
+
+You can enable or disable alerts in ui, you can set thresholds for gpu temp, gpu utilization % and watts. Setting are saved in browser. 
+The defaults are: 
+
+```bash
+this.thresholds = {
+    temperature: 80,  
+    utilization: 100,
+    power: 300
+```
+In windows you can disable native alert notifications sound or disable gpu-monitor sound in ui.
+
+![GPU Monitor Dashboard](images/graph-small.png)
+
 
 ## Troubleshooting
 
