@@ -15,6 +15,7 @@ A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deploymen
 - Temperature, utilization, memory, and power monitoring
 - Docker-based for easy deployment
 - Your GPU name shown in UI
+- Persist history between new containers
 
 
 ## Prerequisites
@@ -22,6 +23,7 @@ A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deploymen
 - Docker
 - NVIDIA GPU with drivers installed
 - NVIDIA Container Toolkit
+- Python 3.10+
 
 ## Quick Start
 
@@ -51,7 +53,7 @@ cd gpu-monitor
 docker-compose up -d
 ```
 
-3. Access the dashboard at: `http://localhost:8081/gpu_stats.html`
+3. Access the dashboard at: `http://localhost:8081/gpu-stats.html`
 
 
 ## Installation Prerequisites
@@ -103,25 +105,12 @@ docker run -d \
 
 ## Configuration
 
-The dashboard is accessible at `http://localhost:8081/gpu_stats.html` by default. To change the port, modify the `docker-compose.yml` file or the `-p` parameter in the docker run command.
+The dashboard is accessible at `http://localhost:8081/gpu-stats.html` by default. To change the port, modify the `docker-compose.yml` file or the `-p` parameter in the docker run command.
 
 --- 
 
 ![GPU Monitor Dashboard](images/gpu2.jpg)
 
-
-## Development
-
-### Project Structure
-```
-gpu-monitor/
-├── Dockerfile
-├── docker-compose.yml
-├── gpu_stats.html
-├── monitor_gpu.sh
-├── README.md
-└── .gitignore
-```
 
 ## Alternative Setup Method (linux)
 
@@ -156,7 +145,7 @@ user@ai:~/gpu-monitor$ ./setup.sh start
 Creating network "gpu-monitor_default" with the default driver
 Creating gpu-monitor ... done
 [+] GPU Monitor started successfully!
-[+] Dashboard available at: http://localhost:8081/gpu_stats.html
+[+] Dashboard available at: http://localhost:8081/gpu-stats.html
 [+] To check logs: docker-compose logs -f
 ```
 
@@ -170,7 +159,7 @@ services:
   gpu-monitor:
     # ... other settings ...
     volumes:
-      - ./data:/app/data    # Persist historical data
+      - ./history:/app/history    # Persist historical data
       - ./logs:/app/logs    # Persist logs
 ```
 

@@ -3,17 +3,19 @@ FROM python:3.12-slim
 # Install required packages
 RUN apt-get update && apt-get install -y \
     curl \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
 WORKDIR /app
 
 # Create necessary directories
-RUN mkdir -p /app/data /app/history /app/logs
+RUN mkdir -p /app/history /app/logs /app/images
 
 # Copy application files
-COPY gpu_stats.html /app/
+COPY gpu-stats.html /app/
 COPY monitor_gpu.sh /app/
+COPY images/ /app/images/
 
 # Make scripts executable
 RUN chmod +x /app/monitor_gpu.sh

@@ -1,4 +1,5 @@
-version: '3'
+version: '3.8'
+
 services:
   gpu-monitor:
     build: .
@@ -9,6 +10,8 @@ services:
       - TZ=America/Los_Angeles   # update your timezone
     volumes:
       - /etc/localtime:/etc/localtime:ro  # Share host timezone
+      - ./history:/app/history    # Persist historical data on host (optional)
+      - ./logs:/app/logs    # Persist logs                          (optional)
     deploy:
       resources:
         reservations:

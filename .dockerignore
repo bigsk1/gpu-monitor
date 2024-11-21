@@ -1,6 +1,6 @@
-data/
-*.log
 .git
 .gitignore
 .env
 env
+history/*.json
+

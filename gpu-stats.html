@@ -1,9 +1,39 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <meta charset="UTF-8">
-    <title>GPU Monitor</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="Real-time NVIDIA GPU monitoring dashboard with historical data tracking and performance metrics">
+        <meta name="author" content="github.com/bigsk1">
+        <meta name="keywords" content="NVIDIA, GPU, Monitoring, Dashboard, Docker, Real-time, Metrics">
+        
+        <title>GPU Monitor</title>
+        
+        <!-- Favicon -->
+        <link rel="apple-touch-icon" sizes="180x180" href="images/favicon.ico">
+        <link rel="icon" type="image/png" sizes="32x32" href="images/favicon.ico">
+        <link rel="icon" type="image/png" sizes="16x16" href="images/favicon.ico">
+        <link rel="shortcut icon" href="images/favicon.ico">
+        
+        <!-- Open Graph / Facebook -->
+        <meta property="og:type" content="website">
+        <meta property="og:url" content="https://github.com/bigsk1/gpu-monitor">
+        <meta property="og:title" content="GPU Monitor - Real-time NVIDIA GPU Dashboard">
+        <meta property="og:description" content="Real-time NVIDIA GPU monitoring dashboard with historical data tracking and performance metrics">
+        <meta property="og:image" content="images/gpu2.png">
+    
+        <!-- Twitter -->
+        <meta property="twitter:card" content="summary_large_image">
+        <meta property="twitter:url" content="https://github.com/bigsk1/gpu-monitor">
+        <meta property="twitter:title" content="GPU Monitor - Real-time NVIDIA GPU Dashboard">
+        <meta property="twitter:description" content="Real-time NVIDIA GPU monitoring dashboard with historical data tracking and performance metrics">
+        <meta property="twitter:image" content="images/gpu2.png">
+    
+        <!-- Theme Color for browsers -->
+        <meta name="theme-color" content="#0a1929">
+        
+        <!-- Chart.js -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
     <style>
         :root {
             --primary: #2196f3;
@@ -388,8 +418,15 @@
         utilizations: []
     };
 
-    // Add this after the historyData declaration
-    let selectedTimeframe = 1; // Default to 1 hour
+    document.querySelectorAll('.timeframe-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            document.querySelectorAll('.timeframe-btn').forEach(b => 
+                b.classList.remove('active'));
+            button.classList.add('active');
+            const hours = parseInt(button.dataset.hours);
+            updateChartForTimeframe(hours);
+        });
+    }); 
 
     function updateGaugeColor(value, element, max = 100) {
         const percentage = (value / max) * 100;
@@ -426,36 +463,58 @@
     }
 
     function updateChartForTimeframe(hours) {
-        fetch(`history/history_${hours}h.json`)
+        fetch('history/history.json')
             .then(response => response.json())
             .then(data => {
                 if (!data || !data.timestamps || data.timestamps.length === 0) {
-                    console.warn(`No data available for ${hours}h timeframe`);
+                    console.warn('No data available');
                     return;
                 }
     
-                // Update chart with timeframe data
-                chart.data.labels = data.timestamps;
-                chart.data.datasets[0].data = data.temperatures;
-                chart.data.datasets[1].data = data.utilizations;
+                // Filter data based on selected timeframe
+                const cutoff = new Date();
+                cutoff.setHours(cutoff.getHours() - hours);
+                
+                const currentYear = new Date().getFullYear();
+                const filteredData = {
+                    timestamps: [],
+                    temperatures: [],
+                    utilizations: [],
+                    memory: [],
+                    power: []
+                };
+    
+                data.timestamps.forEach((timestamp, i) => {
+                    const dt = new Date(`${currentYear} ${timestamp}`);
+                    if (dt >= cutoff) {
+                        filteredData.timestamps.push(timestamp);
+                        filteredData.temperatures.push(data.temperatures[i]);
+                        filteredData.utilizations.push(data.utilizations[i]);
+                        filteredData.memory.push(data.memory[i]);
+                        filteredData.power.push(data.power[i]);
+                    }
+                });
+    
+                // Update chart with filtered data
+                chart.data.labels = filteredData.timestamps;
+                chart.data.datasets[0].data = filteredData.temperatures;
+                chart.data.datasets[1].data = filteredData.utilizations;
                 chart.update();
     
-                // Update performance indicators
+                // Update performance indicators with filtered data
                 document.getElementById('peak-temp').textContent = 
-                    `${Math.max(...data.temperatures)}°C`;
+                    `${Math.max(...filteredData.temperatures)}°C`;
                 document.getElementById('avg-util').textContent = 
-                    `${(data.utilizations.reduce((a, b) => a + b, 0) / data.utilizations.length).toFixed(1)}%`;
+                    `${(filteredData.utilizations.reduce((a, b) => a + b, 0) / filteredData.utilizations.length).toFixed(1)}%`;
                 document.getElementById('max-mem').textContent = 
-                    `${Math.max(...data.memory)} MiB`;
+                    `${Math.max(...filteredData.memory)} MiB`;
                 
-                const avgPower = data.power.reduce((a, b) => a + b, 0) / data.power.length;
-                const avgUtil = data.utilizations.reduce((a, b) => a + b, 0) / data.utilizations.length || 1;
+                const avgPower = filteredData.power.reduce((a, b) => a + b, 0) / filteredData.power.length;
+                const avgUtil = filteredData.utilizations.reduce((a, b) => a + b, 0) / filteredData.utilizations.length || 1;
                 document.getElementById('power-efficiency').textContent = 
                     `${(avgPower / avgUtil).toFixed(1)} W/%`;
             })
-            .catch(error => {
-                console.error(`Error loading ${hours}h historical data:`, error);
-            });
+            .catch(error => console.error('Error loading historical data:', error));
     }
 
     function updateTimeframeStats(data) {
@@ -544,18 +603,29 @@
         .catch(error => console.error('Error updating stats:', error));
     }
     
-    // Separate function to update the chart
+    // updateChart function
     function updateChart() {
-        updateChartForTimeframe(selectedTimeframe);
+        const activeButton = document.querySelector('.timeframe-btn.active');
+        if (activeButton) {
+            const hours = parseInt(activeButton.dataset.hours);
+            updateChartForTimeframe(hours);
+        }
     }
-    
-    // Start updates
-    updateStats();
-    setInterval(updateStats, 5000);
-    // Update chart less frequently
-    setInterval(updateChart, 30000);
 
-     // Initialize timeframe selector
+    // Update the chart initialization options
+    chart.options.scales.x = {
+        ...chart.options.scales.x,
+        ticks: {
+            maxTicksLimit: 20,
+            autoSkip: true,
+            color: '#b2bac2'
+        },
+        grid: {
+            color: 'rgba(255, 255, 255, 0.1)'
+        }
+    };
+
+    // timeframe button initialization:
     document.querySelectorAll('.timeframe-btn').forEach(button => {
         button.addEventListener('click', () => {
             document.querySelectorAll('.timeframe-btn').forEach(b => 
@@ -565,10 +635,9 @@
             updateChartForTimeframe(selectedTimeframe);
         });
     });
-
-    // Start updates
     updateStats();
     setInterval(updateStats, 5000);
+    setInterval(updateChart, 30000);
 </script>
 </body>
 </html>
