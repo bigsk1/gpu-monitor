@@ -6,13 +6,33 @@ LOG_FILE="$BASE_DIR/gpu_stats.log"
 STATS_FILE="$BASE_DIR/gpu_24hr_stats.txt"
 JSON_FILE="$BASE_DIR/gpu_current_stats.json"
 HISTORY_DIR="$BASE_DIR/history"
+LOG_DIR="$BASE_DIR/logs"
+ERROR_LOG="$LOG_DIR/error.log"
+WARNING_LOG="$LOG_DIR/warning.log"
+DEBUG_LOG="$LOG_DIR/debug.log"
 
 # Create required directories
-mkdir -p "$HISTORY_DIR"
+# mkdir -p "$HISTORY_DIR"
+mkdir -p "$LOG_DIR"
+
+# Function to log messages
+log_error() {
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$timestamp] ERROR: $1" | tee -a "$ERROR_LOG"
+}
+
+log_warning() {
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$timestamp] WARNING: $1" | tee -a "$WARNING_LOG"
+}
+
+log_debug() {
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$timestamp] DEBUG: $1" >> "$DEBUG_LOG"
+}
 
 # Get GPU name and save to config
 GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || echo "GPU")
-
 CONFIG_FILE="$BASE_DIR/gpu_config.json"
 
 # Create config JSON with GPU name
@@ -22,17 +42,61 @@ cat > "$CONFIG_FILE" << EOF
 }
 EOF
 
+rotate_logs() {
+    local max_size=$((10 * 1024 * 1024))  # 10MB
+    local max_age=$((2 * 24 * 3600))      # 2 days in seconds
+    local current_time=$(date +%s)
+
+    # Function to check and rotate a specific log file
+    rotate_log_file() {
+        local log_file=$1
+        local timestamp=$(date '+%Y%m%d-%H%M%S')
+
+        # Check file size
+        if [[ -f "$log_file" && $(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file") -gt $max_size ]]; then
+            mv "$log_file" "${log_file}.${timestamp}"
+            touch "$log_file"
+            log_debug "Rotated $log_file due to size"
+        fi
+
+        # Remove old rotated logs
+        find "$(dirname "$log_file")" -name "$(basename "$log_file").*" -type f | while read rotated_log; do
+            local file_time=$(stat -f%m "$rotated_log" 2>/dev/null || stat -c%Y "$rotated_log")
+            if (( current_time - file_time > max_age )); then
+                rm "$rotated_log"
+                log_debug "Removed old log: $rotated_log"
+            fi
+        done
+    }
+
+    # Rotate each log file
+    rotate_log_file "$ERROR_LOG"
+    rotate_log_file "$WARNING_LOG"
+    rotate_log_file "$DEBUG_LOG"
+    rotate_log_file "$LOG_FILE"
+}
+
 # Function to process historical data for different timeframes
 function process_historical_data() {
     local hours=$1
     local output_file="$HISTORY_DIR/history_${hours}h.json"
+
+    if [ ! -f "$LOG_FILE" ]; then
+        log_warning "No log file found when processing ${hours}h historical data"
+        return
+    fi
+
     local cutoff_time=$(date -d "-$hours hours" +%s)
 
-    # Create a temporary Python script for JSON formatting
     cat > /tmp/format_json.py << 'PYTHONSCRIPT'
 import sys
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+
+# Get cutoff time from environment variable
+hours = int(sys.argv[1])
+cutoff_time = datetime.now() - timedelta(hours=hours)
+current_year = datetime.now().year
 
 data = {
     "timestamps": [],
@@ -45,23 +109,40 @@ data = {
 for line in sys.stdin:
     try:
         timestamp, temp, util, mem, power = line.strip().split(',')
-        data["timestamps"].append(timestamp)
-        data["temperatures"].append(float(temp))
-        data["utilizations"].append(float(util))
-        data["memory"].append(float(mem))
-        data["power"].append(float(power))
-    except:
+        # Add current year for proper datetime parsing
+        dt = datetime.strptime(f"{current_year} {timestamp}", "%Y %m-%d %H:%M:%S")
+        
+        if dt >= cutoff_time:
+            data["timestamps"].append(timestamp)
+            data["temperatures"].append(float(temp))
+            data["utilizations"].append(float(util))
+            data["memory"].append(float(mem))
+            data["power"].append(float(power))
+    except Exception as e:
         continue
+
+# If we have too many points, sample them
+MAX_POINTS = 100
+if len(data["timestamps"]) > MAX_POINTS:
+    sample_rate = len(data["timestamps"]) // MAX_POINTS
+    for key in data:
+        data[key] = data[key][::sample_rate]
 
 print(json.dumps(data, indent=4))
 PYTHONSCRIPT
 
-    python3 /tmp/format_json.py < "$LOG_FILE" > "$output_file"
+    # Pass the hours parameter to the Python script
+    python3 /tmp/format_json.py "$hours" < "$LOG_FILE" > "$output_file"
     rm /tmp/format_json.py
 }
 
 # Function to process 24-hour stats
 process_24hr_stats() {
+    if [ ! -f "$LOG_FILE" ]; then
+        log_warning "No log file found when processing 24hr stats"
+        return
+    fi
+
     cat > /tmp/process_stats.py << 'EOF'
 import sys
 from datetime import datetime, timedelta
@@ -120,6 +201,8 @@ EOF
 # Function to update stats
 update_stats() {
     local timestamp=$(date '+%m-%d %H:%M:%S')
+    # For testing only
+    # local timestamp=$(date -d "-$RANDOM seconds" '+%m-%d %H:%M:%S')
     
     # Get all metrics in a single call
     local gpu_stats=$(nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,memory.used,power.draw \
@@ -131,6 +214,8 @@ update_stats() {
         local util=$(echo "$gpu_stats" | cut -d',' -f2 | tr -d ' ')
         local mem=$(echo "$gpu_stats" | cut -d',' -f3 | tr -d ' ')
         local power=$(echo "$gpu_stats" | cut -d',' -f4 | tr -d ' ')
+
+        log_debug "GPU Stats - temp:$temp util:$util mem:$mem power:$power"
 
         # Check if we got valid numbers
         if [[ -n "$temp" && -n "$util" && -n "$mem" && -n "$power" ]]; then
@@ -157,10 +242,10 @@ EOF
             process_historical_data 12
             process_historical_data 24
         else
-            echo "Invalid GPU stats values, retrying in 5 seconds..."
+            log_error "Invalid GPU stats values - temp:$temp util:$util mem:$mem power:$power"
         fi
     else
-        echo "Failed to get GPU stats, retrying in 5 seconds..."
+        log_error "Failed to get GPU stats output"
     fi
 }
 
@@ -170,5 +255,11 @@ cd /app && python3 -m http.server 8081 &
 # Main loop
 while true; do
     update_stats
+    
+    # Run log rotation every hour
+    if [ $(date +%M) -eq 0 ]; then
+        rotate_logs
+    fi
+    
     sleep 5
 done

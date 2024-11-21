@@ -1,5 +1,3 @@
-data/
-*.log
 .git
 .gitignore
 .env

@@ -9,11 +9,13 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Create necessary directories
-RUN mkdir -p /app/data /app/history /app/logs
+RUN mkdir -p /app/history /app/logs /app/images
 
 # Copy application files
-COPY gpu_stats.html /app/
+COPY gpu-stats.html /app/
 COPY monitor_gpu.sh /app/
+COPY images/ /app/images/
+COPY history/ /app/history
 
 # Make scripts executable
 RUN chmod +x /app/monitor_gpu.sh

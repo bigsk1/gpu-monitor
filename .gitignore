@@ -1,7 +1,8 @@
 # Logs and data
-logs/
 data/
 *.log
+logs/*
+!logs/.gitkeep
 
 # Environment
 .env
@@ -17,3 +18,8 @@ data/
 # System files
 .DS_Store
 Thumbs.db
+
+# In .gitignore
+history/*
+!history/.gitkeep
+
