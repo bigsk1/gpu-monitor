@@ -15,6 +15,7 @@ A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deploymen
 - Temperature, utilization, memory, and power monitoring
 - Docker-based for easy deployment
 - Your GPU name shown in UI
+- Persist history between new containers
 
 
 ## Prerequisites
