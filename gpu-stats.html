@@ -463,53 +463,58 @@
     }
 
     function updateChartForTimeframe(hours) {
-        fetch(`history/history_${hours}h.json`)
+        fetch('history/history.json')
             .then(response => response.json())
             .then(data => {
                 if (!data || !data.timestamps || data.timestamps.length === 0) {
-                    console.warn(`No data available for ${hours}h timeframe`);
+                    console.warn('No data available');
                     return;
                 }
     
-                // If we have more than 100 points, sample them
-                let timestamps = data.timestamps;
-                let temperatures = data.temperatures;
-                let utilizations = data.utilizations;
-    
-                if (timestamps.length > 100) {
-                    const sampleRate = Math.floor(timestamps.length / 100);
-                    timestamps = timestamps.filter((_, i) => i % sampleRate === 0);
-                    temperatures = temperatures.filter((_, i) => i % sampleRate === 0);
-                    utilizations = utilizations.filter((_, i) => i % sampleRate === 0);
-                }
-    
-                // Update chart
-                chart.data.labels = timestamps;
-                chart.data.datasets[0].data = temperatures;
-                chart.data.datasets[1].data = utilizations;
-    
-                // Configure axis
-                chart.options.scales.x.ticks.maxTicksLimit = 20; // Limit number of x-axis labels
-                chart.options.scales.x.ticks.autoSkip = true;   // Auto skip labels that don't fit
-    
-                chart.update('none');
-    
-                // Update performance indicators
-                document.getElementById('peak-temp').textContent = 
-                    `${Math.max(...temperatures)}°C`;
-                document.getElementById('avg-util').textContent = 
-                    `${(utilizations.reduce((a, b) => a + b, 0) / utilizations.length).toFixed(1)}%`;
-                document.getElementById('max-mem').textContent = 
-                    `${Math.max(...data.memory)} MiB`;
+                // Filter data based on selected timeframe
+                const cutoff = new Date();
+                cutoff.setHours(cutoff.getHours() - hours);
                 
-                const avgPower = data.power.reduce((a, b) => a + b, 0) / data.power.length;
-                const avgUtil = utilizations.reduce((a, b) => a + b, 0) / utilizations.length || 1;
+                const currentYear = new Date().getFullYear();
+                const filteredData = {
+                    timestamps: [],
+                    temperatures: [],
+                    utilizations: [],
+                    memory: [],
+                    power: []
+                };
+    
+                data.timestamps.forEach((timestamp, i) => {
+                    const dt = new Date(`${currentYear} ${timestamp}`);
+                    if (dt >= cutoff) {
+                        filteredData.timestamps.push(timestamp);
+                        filteredData.temperatures.push(data.temperatures[i]);
+                        filteredData.utilizations.push(data.utilizations[i]);
+                        filteredData.memory.push(data.memory[i]);
+                        filteredData.power.push(data.power[i]);
+                    }
+                });
+    
+                // Update chart with filtered data
+                chart.data.labels = filteredData.timestamps;
+                chart.data.datasets[0].data = filteredData.temperatures;
+                chart.data.datasets[1].data = filteredData.utilizations;
+                chart.update();
+    
+                // Update performance indicators with filtered data
+                document.getElementById('peak-temp').textContent = 
+                    `${Math.max(...filteredData.temperatures)}°C`;
+                document.getElementById('avg-util').textContent = 
+                    `${(filteredData.utilizations.reduce((a, b) => a + b, 0) / filteredData.utilizations.length).toFixed(1)}%`;
+                document.getElementById('max-mem').textContent = 
+                    `${Math.max(...filteredData.memory)} MiB`;
+                
+                const avgPower = filteredData.power.reduce((a, b) => a + b, 0) / filteredData.power.length;
+                const avgUtil = filteredData.utilizations.reduce((a, b) => a + b, 0) / filteredData.utilizations.length || 1;
                 document.getElementById('power-efficiency').textContent = 
                     `${(avgPower / avgUtil).toFixed(1)} W/%`;
             })
-            .catch(error => {
-                console.error(`Error loading ${hours}h historical data:`, error);
-            });
+            .catch(error => console.error('Error loading historical data:', error));
     }
 
     function updateTimeframeStats(data) {

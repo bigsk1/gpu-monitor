@@ -11,26 +11,11 @@ ERROR_LOG="$LOG_DIR/error.log"
 WARNING_LOG="$LOG_DIR/warning.log"
 DEBUG_LOG="$LOG_DIR/debug.log"
 
+# Debug toggle (comment out to disable debug logging)
+# DEBUG=true
+
 # Create required directories
-# mkdir -p "$HISTORY_DIR"
 mkdir -p "$LOG_DIR"
-
-# DEBUG=true  # Uncomment to enable debug logging on host when volume mapping persist logs
-
-# log_debug function to check for DEBUG
-log_debug() {
-    if [ "${DEBUG:-}" = "true" ]; then
-        local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-        echo "[$timestamp] DEBUG: $1" >> "$DEBUG_LOG"
-    fi
-}
-
-
-if [ -d "$HISTORY_DIR" ] && [ -n "$(ls -A $HISTORY_DIR)" ]; then
-    log_debug "Found existing history data"
-else
-    log_debug "No existing history data found, starting fresh"
-fi
 
 # Function to log messages
 log_error() {
@@ -41,6 +26,13 @@ log_error() {
 log_warning() {
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     echo "[$timestamp] WARNING: $1" | tee -a "$WARNING_LOG"
+}
+
+log_debug() {
+    if [ "${DEBUG:-}" = "true" ]; then
+        local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+        echo "[$timestamp] DEBUG: $1" >> "$DEBUG_LOG"
+    fi
 }
 
 # Get GPU name and save to config
@@ -54,48 +46,13 @@ cat > "$CONFIG_FILE" << EOF
 }
 EOF
 
-rotate_logs() {
-    local max_size=$((10 * 1024 * 1024))  # 10MB
-    local max_age=$((2 * 24 * 3600))      # 2 days in seconds
-    local current_time=$(date +%s)
-
-    # Function to check and rotate a specific log file
-    rotate_log_file() {
-        local log_file=$1
-        local timestamp=$(date '+%Y%m%d-%H%M%S')
-
-        # Check file size
-        if [[ -f "$log_file" && $(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file") -gt $max_size ]]; then
-            mv "$log_file" "${log_file}.${timestamp}"
-            touch "$log_file"
-            log_debug "Rotated $log_file due to size"
-        fi
-
-        # Remove old rotated logs
-        find "$(dirname "$log_file")" -name "$(basename "$log_file").*" -type f | while read rotated_log; do
-            local file_time=$(stat -f%m "$rotated_log" 2>/dev/null || stat -c%Y "$rotated_log")
-            if (( current_time - file_time > max_age )); then
-                rm "$rotated_log"
-                log_debug "Removed old log: $rotated_log"
-            fi
-        done
-    }
-
-    # Rotate each log file
-    rotate_log_file "$ERROR_LOG"
-    rotate_log_file "$WARNING_LOG"
-    rotate_log_file "$DEBUG_LOG"
-    rotate_log_file "$LOG_FILE"
-}
-
-# Function to process historical data for different timeframes
+# Function to process historical data
 function process_historical_data() {
-    local hours=$1
-    local output_file="$HISTORY_DIR/history_${hours}h.json"
+    local output_file="$HISTORY_DIR/history.json"
     local temp_file="${output_file}.tmp"
 
     if [ ! -f "$LOG_FILE" ]; then
-        log_warning "No log file found when processing ${hours}h historical data"
+        log_warning "No log file found when processing historical data"
         return
     fi
 
@@ -103,18 +60,13 @@ function process_historical_data() {
     cat > /tmp/format_json.py << 'PYTHONSCRIPT'
 import sys
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 
-hours = int(sys.argv[1])
-output_file = sys.argv[2]
-cutoff_time = datetime.now() - timedelta(hours=hours)
-current_year = datetime.now().year
-
-def load_existing_data():
-    if os.path.exists(output_file):
+def load_existing_data(file_path):
+    if os.path.exists(file_path):
         try:
-            with open(output_file, 'r') as f:
+            with open(file_path, 'r') as f:
                 return json.load(f)
         except:
             return None
@@ -129,7 +81,7 @@ data = {
 }
 
 # Load existing data
-existing_data = load_existing_data()
+existing_data = load_existing_data(sys.argv[1])
 if existing_data:
     data = existing_data
 
@@ -137,9 +89,7 @@ if existing_data:
 for line in sys.stdin:
     try:
         timestamp, temp, util, mem, power = line.strip().split(',')
-        dt = datetime.strptime(f"{current_year} {timestamp}", "%Y %m-%d %H:%M:%S")
-        
-        if dt >= cutoff_time and timestamp not in data["timestamps"]:
+        if timestamp not in data["timestamps"]:
             data["timestamps"].append(timestamp)
             data["temperatures"].append(float(temp))
             data["utilizations"].append(float(util))
@@ -148,47 +98,22 @@ for line in sys.stdin:
     except Exception as e:
         continue
 
-# Filter data by timeframe
-current_time = datetime.now()
-cutoff = current_time - timedelta(hours=hours)
-valid_data = {
-    "timestamps": [],
-    "temperatures": [],
-    "utilizations": [],
-    "memory": [],
-    "power": []
-}
-
-for i, timestamp in enumerate(data["timestamps"]):
-    try:
-        dt = datetime.strptime(f"{current_year} {timestamp}", "%Y %m-%d %H:%M:%S")
-        if dt >= cutoff:
-            valid_data["timestamps"].append(timestamp)
-            valid_data["temperatures"].append(data["temperatures"][i])
-            valid_data["utilizations"].append(data["utilizations"][i])
-            valid_data["memory"].append(data["memory"][i])
-            valid_data["power"].append(data["power"][i])
-    except:
-        continue
-
-print(json.dumps(valid_data, indent=4))
+print(json.dumps(data, indent=4))
 PYTHONSCRIPT
 
     # Process data
-    python3 /tmp/format_json.py "$hours" "$output_file" < "$LOG_FILE" > "$temp_file"
+    python3 /tmp/format_json.py "$output_file" < "$LOG_FILE" > "$temp_file"
 
     # If temp file has valid data, move it to final location
     if [ -s "$temp_file" ]; then
         mv "$temp_file" "$output_file"
-        # Ensure file permissions allow host access
         chmod 666 "$output_file"
-        log_debug "Updated history file for ${hours}h timeframe"
+        log_debug "Updated history file"
     else
-        log_error "Failed to create history for ${hours}h timeframe"
+        log_error "Failed to create history file"
         rm -f "$temp_file"
     fi
 
-    # Cleanup
     rm -f /tmp/format_json.py
 }
 
@@ -251,14 +176,47 @@ print(json.dumps(stats, indent=4))
 EOF
 
     python3 /tmp/process_stats.py < "$LOG_FILE" > "$STATS_FILE"
+    chmod 666 "$STATS_FILE"
     rm /tmp/process_stats.py
+}
+
+# Function to rotate logs
+rotate_logs() {
+    local max_size=$((10 * 1024 * 1024))  # 10MB
+    local max_age=$((2 * 24 * 3600))      # 2 days in seconds
+    local current_time=$(date +%s)
+
+    # Function to check and rotate a specific log file
+    rotate_log_file() {
+        local log_file=$1
+        local timestamp=$(date '+%Y%m%d-%H%M%S')
+
+        # Check file size
+        if [[ -f "$log_file" && $(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file") -gt $max_size ]]; then
+            mv "$log_file" "${log_file}.${timestamp}"
+            touch "$log_file"
+            log_debug "Rotated $log_file due to size"
+        fi
+
+        # Remove old rotated logs
+        find "$(dirname "$log_file")" -name "$(basename "$log_file").*" -type f | while read rotated_log; do
+            local file_time=$(stat -f%m "$rotated_log" 2>/dev/null || stat -c%Y "$rotated_log")
+            if (( current_time - file_time > max_age )); then
+                rm "$rotated_log"
+                log_debug "Removed old log: $rotated_log"
+            fi
+        done
+    }
+
+    # Rotate error and warning logs
+    rotate_log_file "$ERROR_LOG"
+    rotate_log_file "$WARNING_LOG"
+    rotate_log_file "$LOG_FILE"
 }
 
 # Function to update stats
 update_stats() {
     local timestamp=$(date '+%m-%d %H:%M:%S')
-    # For testing only
-    # local timestamp=$(date -d "-$RANDOM seconds" '+%m-%d %H:%M:%S')
     
     # Get all metrics in a single call
     local gpu_stats=$(nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,memory.used,power.draw \
@@ -288,15 +246,13 @@ update_stats() {
     "power": $power
 }
 EOF
+            chmod 666 "$JSON_FILE"
 
             # Process 24-hour stats
             process_24hr_stats
 
-            # Update historical data for different timeframes
-            process_historical_data 1
-            process_historical_data 6
-            process_historical_data 12
-            process_historical_data 24
+            # Update historical data
+            process_historical_data
         else
             log_error "Invalid GPU stats values - temp:$temp util:$util mem:$mem power:$power"
         fi
