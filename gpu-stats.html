@@ -418,7 +418,15 @@
         utilizations: []
     };
 
-    // let selectedTimeframe = 1;  
+    document.querySelectorAll('.timeframe-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            document.querySelectorAll('.timeframe-btn').forEach(b => 
+                b.classList.remove('active'));
+            button.classList.add('active');
+            const hours = parseInt(button.dataset.hours);
+            updateChartForTimeframe(hours);
+        });
+    }); 
 
     function updateGaugeColor(value, element, max = 100) {
         const percentage = (value / max) * 100;
@@ -592,7 +600,11 @@
     
     // updateChart function
     function updateChart() {
-        updateChartForTimeframe(selectedTimeframe);
+        const activeButton = document.querySelector('.timeframe-btn.active');
+        if (activeButton) {
+            const hours = parseInt(activeButton.dataset.hours);
+            updateChartForTimeframe(hours);
+        }
     }
 
     // Update the chart initialization options

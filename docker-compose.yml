@@ -10,7 +10,7 @@ services:
       - TZ=America/Los_Angeles   # update your timezone
     volumes:
       - /etc/localtime:/etc/localtime:ro  # Share host timezone
-      # - ./history:/app/history    # Persist historical data, current overriding in .sh need to solve
+      - ./history:/app/history    # Persist historical data on host
       - ./logs:/app/logs    # Persist logs
     deploy:
       resources:

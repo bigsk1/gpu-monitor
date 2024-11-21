@@ -15,6 +15,12 @@ DEBUG_LOG="$LOG_DIR/debug.log"
 # mkdir -p "$HISTORY_DIR"
 mkdir -p "$LOG_DIR"
 
+if [ -d "$HISTORY_DIR" ] && [ -n "$(ls -A $HISTORY_DIR)" ]; then
+    log_debug "Found existing history data"
+else
+    log_debug "No existing history data found, starting fresh"
+fi
+
 # Function to log messages
 log_error() {
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
@@ -80,23 +86,33 @@ rotate_logs() {
 function process_historical_data() {
     local hours=$1
     local output_file="$HISTORY_DIR/history_${hours}h.json"
+    local temp_file="${output_file}.tmp"
 
     if [ ! -f "$LOG_FILE" ]; then
         log_warning "No log file found when processing ${hours}h historical data"
         return
     fi
 
-    local cutoff_time=$(date -d "-$hours hours" +%s)
-
+    # Create the Python script
     cat > /tmp/format_json.py << 'PYTHONSCRIPT'
 import sys
 import json
 from datetime import datetime, timedelta
+import os
 
-# Get cutoff time from environment variable
 hours = int(sys.argv[1])
+output_file = sys.argv[2]
 cutoff_time = datetime.now() - timedelta(hours=hours)
 current_year = datetime.now().year
+
+def load_existing_data():
+    if os.path.exists(output_file):
+        try:
+            with open(output_file, 'r') as f:
+                return json.load(f)
+        except:
+            return None
+    return None
 
 data = {
     "timestamps": [],
@@ -106,13 +122,18 @@ data = {
     "power": []
 }
 
+# Load existing data
+existing_data = load_existing_data()
+if existing_data:
+    data = existing_data
+
+# Process new data
 for line in sys.stdin:
     try:
         timestamp, temp, util, mem, power = line.strip().split(',')
-        # Add current year for proper datetime parsing
         dt = datetime.strptime(f"{current_year} {timestamp}", "%Y %m-%d %H:%M:%S")
         
-        if dt >= cutoff_time:
+        if dt >= cutoff_time and timestamp not in data["timestamps"]:
             data["timestamps"].append(timestamp)
             data["temperatures"].append(float(temp))
             data["utilizations"].append(float(util))
@@ -121,19 +142,48 @@ for line in sys.stdin:
     except Exception as e:
         continue
 
-# If we have too many points, sample them
-MAX_POINTS = 100
-if len(data["timestamps"]) > MAX_POINTS:
-    sample_rate = len(data["timestamps"]) // MAX_POINTS
-    for key in data:
-        data[key] = data[key][::sample_rate]
+# Filter data by timeframe
+current_time = datetime.now()
+cutoff = current_time - timedelta(hours=hours)
+valid_data = {
+    "timestamps": [],
+    "temperatures": [],
+    "utilizations": [],
+    "memory": [],
+    "power": []
+}
 
-print(json.dumps(data, indent=4))
+for i, timestamp in enumerate(data["timestamps"]):
+    try:
+        dt = datetime.strptime(f"{current_year} {timestamp}", "%Y %m-%d %H:%M:%S")
+        if dt >= cutoff:
+            valid_data["timestamps"].append(timestamp)
+            valid_data["temperatures"].append(data["temperatures"][i])
+            valid_data["utilizations"].append(data["utilizations"][i])
+            valid_data["memory"].append(data["memory"][i])
+            valid_data["power"].append(data["power"][i])
+    except:
+        continue
+
+print(json.dumps(valid_data, indent=4))
 PYTHONSCRIPT
 
-    # Pass the hours parameter to the Python script
-    python3 /tmp/format_json.py "$hours" < "$LOG_FILE" > "$output_file"
-    rm /tmp/format_json.py
+    # Process data
+    python3 /tmp/format_json.py "$hours" "$output_file" < "$LOG_FILE" > "$temp_file"
+
+    # If temp file has valid data, move it to final location
+    if [ -s "$temp_file" ]; then
+        mv "$temp_file" "$output_file"
+        # Ensure file permissions allow host access
+        chmod 666 "$output_file"
+        log_debug "Updated history file for ${hours}h timeframe"
+    else
+        log_error "Failed to create history for ${hours}h timeframe"
+        rm -f "$temp_file"
+    fi
+
+    # Cleanup
+    rm -f /tmp/format_json.py
 }
 
 # Function to process 24-hour stats
