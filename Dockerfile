@@ -16,6 +16,7 @@ RUN mkdir -p /app/history /app/logs /app/images
 COPY gpu-stats.html /app/
 COPY monitor_gpu.sh /app/
 COPY images/ /app/images/
+COPY sounds/ /app/sounds/
 
 # Make scripts executable
 RUN chmod +x /app/monitor_gpu.sh

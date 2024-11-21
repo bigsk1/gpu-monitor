@@ -31,6 +31,10 @@
     
         <!-- Theme Color for browsers -->
         <meta name="theme-color" content="#0a1929">
+
+        <audio id="alertSound" preload="auto">
+            <source src="sounds/alert.mp3" type="audio/mpeg">
+        </audio>
         
         <!-- Chart.js -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
@@ -210,6 +214,47 @@
             background: rgba(255, 255, 255, 0.05);
         }
 
+        @keyframes alert-flash {
+            0% { background-color: var(--bg-card); }
+            50% { background-color: var(--danger); }
+            100% { background-color: var(--bg-card); }
+        }
+        
+        .alert {
+            animation: alert-flash 1s infinite;
+        }
+        
+        .alert-settings {
+            display: grid;
+            gap: 1rem;
+        }
+        
+        .setting {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .setting label {
+            flex: 1;
+            color: var(--text-secondary);
+        }
+        
+        .setting input[type="number"] {
+            width: 80px;
+            padding: 0.5rem;
+            border: 1px solid var(--primary);
+            border-radius: 4px;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+        }
+        
+        .setting input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
         @media (max-width: 768px) {
             body {
                 padding: 1rem;
@@ -338,6 +383,231 @@
     </table>
 </div>
 </div>
+<script>
+    class AlertSystem {
+        constructor() {
+            // thresholds for alerts
+            this.thresholds = {
+                temperature: 80,  
+                utilization: 100,
+                power: 300
+            };
+            this.soundEnabled = true;
+            this.notificationsEnabled = false;
+            this.lastAlertTime = {};
+            this.ALERT_COOLDOWN = 10000; // 10 seconds
+            
+            // Debug sound setup
+            this.alertSound = document.getElementById('alertSound');
+            console.log('Sound element found:', !!this.alertSound);
+            
+            this.initUI();
+            this.requestNotificationPermission();
+            this.loadSettings();
+            
+            // Debug initial state
+            console.log('Initial settings:', {
+                thresholds: this.thresholds,
+                soundEnabled: this.soundEnabled,
+                notificationsEnabled: this.notificationsEnabled
+            });
+        }
+    
+        async requestNotificationPermission() {
+            if (!("Notification" in window)) {
+                console.log('Notifications not supported');
+                return;
+            }
+            
+            try {
+                const permission = await Notification.requestPermission();
+                this.notificationsEnabled = permission === "granted";
+                const checkbox = document.getElementById('notificationsEnabled');
+                if (checkbox) {
+                    checkbox.checked = this.notificationsEnabled;
+                }
+                console.log('Notification permission:', permission);
+            } catch (error) {
+                console.error('Error requesting notification permission:', error);
+            }
+        }
+    
+        loadSettings() {
+            try {
+                const savedSettings = localStorage.getItem('alertSettings');
+                if (savedSettings) {
+                    const settings = JSON.parse(savedSettings);
+                    this.thresholds = settings.thresholds || this.thresholds;
+                    this.soundEnabled = settings.soundEnabled ?? this.soundEnabled;
+                    this.notificationsEnabled = settings.notificationsEnabled ?? this.notificationsEnabled;
+                    
+                    // Update UI
+                    this.updateSettingsUI();
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+    
+        saveSettings() {
+            try {
+                localStorage.setItem('alertSettings', JSON.stringify({
+                    thresholds: this.thresholds,
+                    soundEnabled: this.soundEnabled,
+                    notificationsEnabled: this.notificationsEnabled
+                }));
+                console.log('Settings saved:', this.thresholds);
+            } catch (error) {
+                console.error('Error saving settings:', error);
+            }
+        }
+    
+        updateSettingsUI() {
+            const elements = {
+                tempThreshold: document.getElementById('tempThreshold'),
+                utilThreshold: document.getElementById('utilThreshold'),
+                powerThreshold: document.getElementById('powerThreshold'),
+                soundEnabled: document.getElementById('soundEnabled'),
+                notificationsEnabled: document.getElementById('notificationsEnabled')
+            };
+    
+            if (elements.tempThreshold) elements.tempThreshold.value = this.thresholds.temperature;
+            if (elements.utilThreshold) elements.utilThreshold.value = this.thresholds.utilization;
+            if (elements.powerThreshold) elements.powerThreshold.value = this.thresholds.power;
+            if (elements.soundEnabled) elements.soundEnabled.checked = this.soundEnabled;
+            if (elements.notificationsEnabled) elements.notificationsEnabled.checked = this.notificationsEnabled;
+        }
+    
+        initUI() {
+            const settingsHtml = `
+                <div class="card">
+                    <h2>Alert Settings</h2>
+                    <div class="alert-settings">
+                        <div class="setting">
+                            <label>Temperature Threshold (°C)</label>
+                            <input type="number" id="tempThreshold" value="${this.thresholds.temperature}">
+                        </div>
+                        <div class="setting">
+                            <label>GPU Utilization Threshold (%)</label>
+                            <input type="number" id="utilThreshold" value="${this.thresholds.utilization}">
+                        </div>
+                        <div class="setting">
+                            <label>Power Threshold (W)</label>
+                            <input type="number" id="powerThreshold" value="${this.thresholds.power}">
+                        </div>
+                        <div class="setting">
+                            <label>Sound Alerts</label>
+                            <input type="checkbox" id="soundEnabled" ${this.soundEnabled ? 'checked' : ''}>
+                        </div>
+                        <div class="setting">
+                            <label>Browser Notifications</label>
+                            <input type="checkbox" id="notificationsEnabled" ${this.notificationsEnabled ? 'checked' : ''}>
+                        </div>
+                    </div>
+                </div>
+            `;
+    
+            document.querySelector('.dashboard').insertAdjacentHTML('beforeend', settingsHtml);
+            
+            // Set up event listeners
+            document.getElementById('tempThreshold').addEventListener('change', (e) => {
+                this.thresholds.temperature = parseInt(e.target.value);
+                this.saveSettings();
+                console.log('Temperature threshold updated:', this.thresholds.temperature);
+            });
+    
+            document.getElementById('utilThreshold').addEventListener('change', (e) => {
+                this.thresholds.utilization = parseInt(e.target.value);
+                this.saveSettings();
+                console.log('Utilization threshold updated:', this.thresholds.utilization);
+            });
+    
+            document.getElementById('powerThreshold').addEventListener('change', (e) => {
+                this.thresholds.power = parseInt(e.target.value);
+                this.saveSettings();
+                console.log('Power threshold updated:', this.thresholds.power);
+            });
+    
+            document.getElementById('soundEnabled').addEventListener('change', (e) => {
+                this.soundEnabled = e.target.checked;
+                this.saveSettings();
+                console.log('Sound alerts:', this.soundEnabled ? 'enabled' : 'disabled');
+            });
+    
+            document.getElementById('notificationsEnabled').addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    this.requestNotificationPermission();
+                } else {
+                    this.notificationsEnabled = false;
+                    this.saveSettings();
+                }
+                console.log('Notifications:', this.notificationsEnabled ? 'enabled' : 'disabled');
+            });
+        }
+    
+        checkThresholds(data) {
+            console.log('Checking thresholds:', {
+                current: data,
+                thresholds: this.thresholds
+            });
+            
+            const currentTime = Date.now();
+            
+            if (data.temperature > this.thresholds.temperature) {
+                if (currentTime - (this.lastAlertTime.temp || 0) > this.ALERT_COOLDOWN) {
+                    this.triggerAlert('temperature', data.temperature, '°C');
+                    this.lastAlertTime.temp = currentTime;
+                }
+            }
+    
+            if (data.utilization > this.thresholds.utilization) {
+                if (currentTime - (this.lastAlertTime.util || 0) > this.ALERT_COOLDOWN) {
+                    this.triggerAlert('utilization', data.utilization, '%');
+                    this.lastAlertTime.util = currentTime;
+                }
+            }
+    
+            if (data.power > this.thresholds.power) {
+                if (currentTime - (this.lastAlertTime.power || 0) > this.ALERT_COOLDOWN) {
+                    this.triggerAlert('power', data.power, 'W');
+                    this.lastAlertTime.power = currentTime;
+                }
+            }
+        }
+    
+        triggerAlert(type, value, unit) {
+            console.log('Triggering alert:', { type, value, unit });
+    
+            // Visual alert
+            const element = document.getElementById(`${type}-value`);
+            const card = element?.closest('.card');
+            if (card) {
+                card.classList.add('alert');
+                setTimeout(() => card.classList.remove('alert'), 5000);
+            }
+    
+            // Sound alert
+            if (this.soundEnabled && this.alertSound) {
+                this.alertSound.play().catch(e => console.error('Error playing sound:', e));
+            }
+    
+            // Browser notification
+            if (this.notificationsEnabled) {
+                try {
+                    new Notification("GPU Alert", {
+                        body: `High ${type}: ${value}${unit}`,
+                        icon: "images/favicon.ico"
+                    });
+                } catch (error) {
+                    console.error('Error showing notification:', error);
+                }
+            }
+        }
+    }
+
+    // Initialize alert system
+    const alertSystem = new AlertSystem();
+</script>
 <script>
     // Function to update GPU name
     function updateGPUName() {
@@ -599,10 +869,13 @@
             } catch (e) {
                 console.error('Error parsing 24hr stats:', e);
             }
+
+            // Check alerts
+            alertSystem.checkThresholds(currentData);
         })
         .catch(error => console.error('Error updating stats:', error));
     }
-    
+
     // updateChart function
     function updateChart() {
         const activeButton = document.querySelector('.timeframe-btn.active');
