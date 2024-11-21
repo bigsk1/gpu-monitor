@@ -15,6 +15,17 @@ DEBUG_LOG="$LOG_DIR/debug.log"
 # mkdir -p "$HISTORY_DIR"
 mkdir -p "$LOG_DIR"
 
+# DEBUG=true  # Uncomment to enable debug logging on host when volume mapping persist logs
+
+# log_debug function to check for DEBUG
+log_debug() {
+    if [ "${DEBUG:-}" = "true" ]; then
+        local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+        echo "[$timestamp] DEBUG: $1" >> "$DEBUG_LOG"
+    fi
+}
+
+
 if [ -d "$HISTORY_DIR" ] && [ -n "$(ls -A $HISTORY_DIR)" ]; then
     log_debug "Found existing history data"
 else
@@ -30,11 +41,6 @@ log_error() {
 log_warning() {
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     echo "[$timestamp] WARNING: $1" | tee -a "$WARNING_LOG"
-}
-
-log_debug() {
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "[$timestamp] DEBUG: $1" >> "$DEBUG_LOG"
 }
 
 # Get GPU name and save to config
