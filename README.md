@@ -5,16 +5,18 @@
 
 A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deployment and cross-platform compatibility.
 
+![GPU Monitor Dashboard](images/gpu.png)
+
 ##  Quick Navigation 🔍
 
-<details open >
+<details>
   <summary>Features</summary>
 
   - [Features](#features)
 
 </details>
 
-<details open>
+<details>
   <summary>Prerequisites</summary>
 
   - [Prerequisites](#prerequisites)
@@ -29,7 +31,7 @@ A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deploymen
 
 </details>
 
-<details>
+<details open>
   <summary>Installation Prerequisites</summary>
 
   - [Ubuntu / Debian / WSL](#1-ubuntu--debian--wsl)
@@ -89,7 +91,6 @@ A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deploymen
 
 </details>
 
-![GPU Monitor Dashboard](images/gpu.png)
 
 ## Features
 
