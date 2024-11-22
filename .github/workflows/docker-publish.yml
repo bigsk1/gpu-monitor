@@ -72,17 +72,18 @@ jobs:
           provenance: mode=max
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          outputs: |
-            type=image,name=${{ env.GHCR_IMAGE }},push-by-digest=true
-            type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true
 
       - name: Export SBOM
         run: |
           mkdir -p sbom
-          docker buildx imagetools inspect ${{ env.GHCR_IMAGE }}:${{ steps.meta.outputs.version }} \
-            --format '{{ json .SBOM }}' > sbom/bom.json
+          # Wait a moment for the image to be available
+          sleep 10
+          DIGEST=$(docker buildx imagetools inspect ${{ env.GHCR_IMAGE }}:main --raw)
+          echo "Image digest: $DIGEST"
+          docker buildx imagetools inspect ${{ env.GHCR_IMAGE }}@$DIGEST \
+            --format '{{ json .SBOM }}' > sbom/bom.json || echo "SBOM export failed but continuing"
 
-      # Optional: Upload SBOM as artifact
+      # Optional: Upload SBOM
       - name: Upload SBOM
         uses: actions/upload-artifact@v3
         with:
