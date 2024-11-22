@@ -16,38 +16,37 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write  # Needed for provenance signing
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@v3.7.0
-      - name: Check install!
-        run: cosign version
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
           images: |
             ${{ env.GHCR_IMAGE }}
@@ -55,9 +54,14 @@ jobs:
           tags: |
             type=ref,event=branch
             type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix={{date 'YYYYMMDD'}}-
+          labels: |
+            org.opencontainers.image.title=GPU Monitor
+            org.opencontainers.image.description=Real-time NVIDIA GPU monitoring dashboard
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
 
       - name: Build and push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -65,3 +69,23 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           sbom: true
+          provenance: mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: |
+            type=image,name=${{ env.GHCR_IMAGE }},push-by-digest=true
+            type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true
+
+      - name: Export SBOM
+        run: |
+          mkdir -p sbom
+          docker buildx imagetools inspect ${{ env.GHCR_IMAGE }}:${{ steps.meta.outputs.version }} \
+            --format '{{ json .SBOM }}' > sbom/bom.json
+
+      # Optional: Upload SBOM as artifact
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v3
+        with:
+          name: sbom
+          path: sbom/bom.json
+          retention-days: 5
