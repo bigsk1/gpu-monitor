@@ -1,5 +1,7 @@
-[![License](https://img.shields.io/github/license/bigsk1/gpu-monitor)](https://github.com/bigsk1/gpu-monitor/blob/main/LICENSE)
 ![Docker support](https://img.shields.io/badge/docker-supported-blue)
+[![Docker Pulls](https://img.shields.io/docker/pulls/bigsk1/gpu-monitor)](https://hub.docker.com/r/bigsk1/gpu-monitor)
+[![Docker Image Size](https://img.shields.io/docker/image-size/bigsk1/gpu-monitor)](https://hub.docker.com/r/bigsk1/gpu-monitor)
+
 
 # Nvidia GPU Dashboard
 
@@ -353,5 +355,6 @@ If this failed proceed to [Installation Prerequisites](#installation-prerequisit
 
 
 ## License
+[![License](https://img.shields.io/github/license/bigsk1/gpu-monitor)](https://github.com/bigsk1/gpu-monitor/blob/main/LICENSE) 
 
-MIT License - see [LICENSE](LICENSE) file for details.
+see [LICENSE](LICENSE) file for details.
