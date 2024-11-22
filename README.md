@@ -232,7 +232,7 @@ docker run -d \
 
 ## Configuration
 
-The dashboard is accessible at Access the dashboard at: [http://localhost:8081/gpu-stats.html](http://localhost:8081/gpu-stats.html)
+The dashboard is accessible at: [http://localhost:8081/gpu-stats.html](http://localhost:8081/gpu-stats.html)
  by default. To change the port, modify the `docker-compose.yml` file or the `-p` parameter in the docker run command.
 
 --- 
@@ -317,7 +317,6 @@ The defaults are:
     utilization: 100,
     power: 300
 ```
-In windows you can disable native alert notifications sound or disable gpu-monitor sound in ui.
 
 ![GPU Monitor Dashboard](images/graph-small.png)
 
@@ -329,7 +328,7 @@ In windows you can disable native alert notifications sound or disable gpu-monit
 1. **NVIDIA SMI not found**
    - Ensure NVIDIA drivers are installed
    - Verify NVIDIA Container Toolkit installation
-   - make sure you can run  
+   - Make sure you can run:  
 
 ```bash
 sudo docker run --rm --runtime=nvidia --gpus all ubuntu nvidia-smi
@@ -352,7 +351,7 @@ If this failed proceed to [Installation Prerequisites](#installation-prerequisit
 
 5. **I don't like the alert sound**
     - Replace the .mp3 in the `sounds` folder and name it alert.mp3
-    - Getting double sounds from notifications disable one of them
+    - Getting double sounds from notifications, disable windows notifications or disable it in ui.
 
 
 ## License
