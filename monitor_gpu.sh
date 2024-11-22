@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# File paths - everything in the web root
 BASE_DIR="/app"
 LOG_FILE="$BASE_DIR/gpu_stats.log"
 STATS_FILE="$BASE_DIR/gpu_24hr_stats.txt"
@@ -10,6 +9,9 @@ LOG_DIR="$BASE_DIR/logs"
 ERROR_LOG="$LOG_DIR/error.log"
 WARNING_LOG="$LOG_DIR/warning.log"
 DEBUG_LOG="$LOG_DIR/debug.log"
+BUFFER_FILE="/tmp/stats_buffer"
+INTERVAL=4  # update interval seconds
+BUFFER_SIZE=15  # 60 seconds / 4 second interval = 15 readings
 
 # Debug toggle (comment out to disable debug logging)
 # DEBUG=true
@@ -56,8 +58,8 @@ function process_historical_data() {
         return
     fi
 
-    # Create the Python script
-    cat > /tmp/format_json.py << 'PYTHONSCRIPT'
+    # Create the Python script - note the closing PYTHONSCRIPT must be at start of line
+cat > /tmp/format_json.py << 'PYTHONSCRIPT'
 import sys
 import json
 from datetime import datetime
@@ -80,31 +82,49 @@ data = {
     "power": []
 }
 
-# Load existing data
 existing_data = load_existing_data(sys.argv[1])
 if existing_data:
     data = existing_data
 
-# Process new data
+BATCH_SIZE = 10
+data_buffer = []
+
 for line in sys.stdin:
     try:
         timestamp, temp, util, mem, power = line.strip().split(',')
-        if timestamp not in data["timestamps"]:
-            data["timestamps"].append(timestamp)
-            data["temperatures"].append(float(temp))
-            data["utilizations"].append(float(util))
-            data["memory"].append(float(mem))
-            data["power"].append(float(power))
+        data_buffer.append({
+            "timestamp": timestamp,
+            "temperature": float(temp),
+            "utilization": float(util),
+            "memory": float(mem),
+            "power": float(power)
+        })
+        
+        if len(data_buffer) >= BATCH_SIZE:
+            for entry in data_buffer:
+                if entry["timestamp"] not in data["timestamps"]:
+                    data["timestamps"].append(entry["timestamp"])
+                    data["temperatures"].append(entry["temperature"])
+                    data["utilizations"].append(entry["utilization"])
+                    data["memory"].append(entry["memory"])
+                    data["power"].append(entry["power"])
+            data_buffer = []
     except Exception as e:
         continue
+
+for entry in data_buffer:
+    if entry["timestamp"] not in data["timestamps"]:
+        data["timestamps"].append(entry["timestamp"])
+        data["temperatures"].append(entry["temperature"])
+        data["utilizations"].append(entry["utilization"])
+        data["memory"].append(entry["memory"])
+        data["power"].append(entry["power"])
 
 print(json.dumps(data, indent=4))
 PYTHONSCRIPT
 
-    # Process data
     python3 /tmp/format_json.py "$output_file" < "$LOG_FILE" > "$temp_file"
 
-    # If temp file has valid data, move it to final location
     if [ -s "$temp_file" ]; then
         mv "$temp_file" "$output_file"
         chmod 666 "$output_file"
@@ -214,30 +234,24 @@ rotate_logs() {
     rotate_log_file "$LOG_FILE"
 }
 
-# Function to update stats
+# Update the update_stats function
 update_stats() {
+    # Get current stats
     local timestamp=$(date '+%m-%d %H:%M:%S')
-    
-    # Get all metrics in a single call
     local gpu_stats=$(nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,memory.used,power.draw \
                      --format=csv,noheader,nounits 2>/dev/null)
     
     if [[ -n "$gpu_stats" ]]; then
-        # Parse the comma-separated values
+        # Append to buffer
+        echo "$timestamp,$gpu_stats" >> "$BUFFER_FILE"
+
+        # Update current stats JSON for real-time display
         local temp=$(echo "$gpu_stats" | cut -d',' -f1 | tr -d ' ')
         local util=$(echo "$gpu_stats" | cut -d',' -f2 | tr -d ' ')
         local mem=$(echo "$gpu_stats" | cut -d',' -f3 | tr -d ' ')
         local power=$(echo "$gpu_stats" | cut -d',' -f4 | tr -d ' ')
 
-        log_debug "GPU Stats - temp:$temp util:$util mem:$mem power:$power"
-
-        # Check if we got valid numbers
-        if [[ -n "$temp" && -n "$util" && -n "$mem" && -n "$power" ]]; then
-            # Log data
-            echo "$timestamp,$temp,$util,$mem,$power" >> "$LOG_FILE"
-
-            # Create current stats JSON
-            cat > "$JSON_FILE" << EOF
+        cat > "$JSON_FILE" << EOF
 {
     "timestamp": "$timestamp",
     "temperature": $temp,
@@ -246,23 +260,23 @@ update_stats() {
     "power": $power
 }
 EOF
-            chmod 666 "$JSON_FILE"
+        chmod 666 "$JSON_FILE"
 
-            # Process 24-hour stats
-            process_24hr_stats
-
-            # Update historical data
+        # Process buffer when full (15 readings = 1 minute)
+        if [[ -f "$BUFFER_FILE" ]] && [[ $(wc -l < "$BUFFER_FILE") -ge $BUFFER_SIZE ]]; then
+            cat "$BUFFER_FILE" >> "$LOG_FILE"
             process_historical_data
-        else
-            log_error "Invalid GPU stats values - temp:$temp util:$util mem:$mem power:$power"
+            process_24hr_stats
+            > "$BUFFER_FILE"  # Clear buffer
+            log_debug "Processed buffered data"
         fi
     else
         log_error "Failed to get GPU stats output"
     fi
 }
 
-# Start web server in background
-cd /app && python3 -m http.server 8081 &
+# Start web server in background using the new Python server
+cd /app && python3 server.py &
 
 # Main loop
 while true; do
@@ -273,5 +287,5 @@ while true; do
         rotate_logs
     fi
     
-    sleep 5
+    sleep $INTERVAL
 done

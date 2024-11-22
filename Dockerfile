@@ -6,6 +6,9 @@ RUN apt-get update && apt-get install -y \
     jq \
     && rm -rf /var/lib/apt/lists/*
 
+# Install aiohttp
+RUN pip install aiohttp
+
 # Create app directory
 WORKDIR /app
 
@@ -15,6 +18,7 @@ RUN mkdir -p /app/history /app/logs /app/images
 # Copy application files
 COPY gpu-stats.html /app/
 COPY monitor_gpu.sh /app/
+COPY server.py /app/
 COPY images/ /app/images/
 COPY sounds/ /app/sounds/
 
