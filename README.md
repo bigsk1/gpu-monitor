@@ -5,6 +5,90 @@
 
 A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deployment and cross-platform compatibility.
 
+##  Quick Navigation 🔍
+
+<details open >
+  <summary>Features</summary>
+
+  - [Features](#features)
+
+</details>
+
+<details open>
+  <summary>Prerequisites</summary>
+
+  - [Prerequisites](#prerequisites)
+
+</details>
+
+<details open>
+  <summary>Quick Start</summary>
+
+  - [Using Pre-built Image](#using-pre-built-image)
+  - [Using Docker Compose](#using-docker-compose)
+
+</details>
+
+<details>
+  <summary>Installation Prerequisites</summary>
+
+  - [Ubuntu / Debian / WSL](#1-ubuntu--debian--wsl)
+  - [Install NVIDIA Container Toolkit](#2-install-nvidia-container-toolkit)
+  - [Configure Docker with Toolkit](#3-configure-docker-with-toolkit)
+  - [Restart Docker Daemon](#4-restart-docker-daemon)
+  - [Test Installation](#5-test-to-see-if-installed-correctly)
+
+</details>
+
+<details>
+  <summary>Building gpu-monitor from Source</summary>
+
+  - [Clone and Build the Repository](#building-gpu-monitor-from-source)
+
+</details>
+
+<details>
+  <summary>Configuration</summary>
+
+  - [Access the Dashboard](#configuration)
+
+</details>
+
+<details open>
+  <summary>Alternative Setup Method</summary>
+
+  - [Setup Script Instructions](#alternative-setup-method)
+
+</details>
+
+<details>
+  <summary>Data Persistence</summary>
+
+  - [Managing Data Persistence](#data-persistence)
+
+</details>
+
+<details>
+  <summary>Alerts</summary>
+
+  - [Configuring Alerts](#alerts)
+
+</details>
+
+<details>
+  <summary>Troubleshooting</summary>
+
+  - [Common Issues](#common-issues)
+
+</details>
+
+<details>
+  <summary>License</summary>
+
+  - [License](#license)
+
+</details>
+
 ![GPU Monitor Dashboard](images/gpu.png)
 
 ## Features
@@ -19,7 +103,6 @@ A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deploymen
 - Real time alerts - sound and notification
 - Responsive theme for any size screen
 
-
 ## Prerequisites
 
 - Docker
@@ -27,19 +110,31 @@ A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deploymen
 - NVIDIA Container Toolkit
 - Python 3.10+
 
+
 ## Quick Start
 
-### Using Pre-built Image Docker Run
+Test to see if you already have the requirements and ready to use. 
+
+```bash
+sudo docker run --rm --runtime=nvidia --gpus all ubuntu nvidia-smi
+```
+If this failed proceed to [Installation Prerequisites](#installation-prerequisites)
+
+
+
+### Using Pre-built Image
 
 ```bash
 docker run -d \
   --name gpu-monitor \
-  --restart unless-stopped \
-  --gpus all \
   -p 8081:8081 \
   -e TZ=America/Los_Angeles \
   -v /etc/localtime:/etc/localtime:ro \
-  ghcr.io/bigsk1/gpu-monitor:latest
+  -v ./history:/app/history \
+  -v ./logs:/app/logs \
+  --gpus all \
+  --restart unless-stopped \
+  bigsk1/gpu-monitor:latest
 ```
 Note: Update your timezone to use the correct time
 ### Using Docker Compose
@@ -55,32 +150,59 @@ cd gpu-monitor
 docker-compose up -d
 ```
 
-3. Access the dashboard at: `http://localhost:8081/gpu-stats.html`
+3. Access the dashboard at: [http://localhost:8081/gpu-stats.html](http://localhost:8081/gpu-stats.html)
+
 
 
 ## Installation Prerequisites
 
-### 1. Install NVIDIA Container Toolkit
 
-For Ubuntu/Debian:
+### 1. Ubuntu / Debian / WSL  
+Windows users make sure you have wsl with docker an easy way is [Docker Desktop Installation for Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
+ 
+Installing with apt add NVIDIA package repositories
+
 ```bash
-# Add NVIDIA package repositories
-distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
-curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
-curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+  && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+```
 
-# Install nvidia-docker2
+### 2. Install nvidia container toolkit
+
+```bash
 sudo apt-get update
-sudo apt-get install -y nvidia-docker2
+```
+```bash
+sudo apt-get install -y nvidia-container-toolkit
+```
 
-# Restart Docker daemon
+### 3. Configure Docker with toolkit
+
+```bash
+sudo nvidia-ctk runtime configure --runtime=docker
+```
+The nvidia-ctk command modifies the /etc/docker/daemon.json file on the host. The file is updated so that Docker can use the NVIDIA Container Runtime.
+
+
+### 4. Restart Docker daemon
+
+```bash
 sudo systemctl restart docker
 ```
+
+### 5. Test to see if installed correctly
+
+```bash
+sudo docker run --rm --runtime=nvidia --gpus all ubuntu nvidia-smi
+```
+
 
 For other distributions, check the [official documentation](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
 
 
-## Building from Source
+## Building gpu-monitor from source
 
 1. Clone the repository:
 ```bash
@@ -97,47 +219,65 @@ docker build -t gpu-monitor .
 ```bash
 docker run -d \
   --name gpu-monitor \
-  --restart unless-stopped \
-  --gpus all \
   -p 8081:8081 \
   -e TZ=America/Los_Angeles \
   -v /etc/localtime:/etc/localtime:ro \
+  -v ./history:/app/history \
+  -v ./logs:/app/logs \
+  --gpus all \
+  --restart unless-stopped \
   gpu-monitor
 ```
 
 ## Configuration
 
-The dashboard is accessible at `http://localhost:8081/gpu-stats.html` by default. To change the port, modify the `docker-compose.yml` file or the `-p` parameter in the docker run command.
+The dashboard is accessible at Access the dashboard at: [http://localhost:8081/gpu-stats.html](http://localhost:8081/gpu-stats.html)
+ by default. To change the port, modify the `docker-compose.yml` file or the `-p` parameter in the docker run command.
 
 --- 
 
 ![GPU Monitor Dashboard](images/gpu2.jpg)
 
 
-## Alternative Setup Method (linux)
+## Alternative Setup Method
 
 A setup script is provided for convenience. It checks prerequisites and manages the service:
 
+- If you have issues then make sure `setup.sh` is executable
+
 ```bash
-# Check prerequisites and start the service
+chmod +x ./setup.sh
+```
+
+---
+- Check prerequisites and start the service
+```bash
 ./setup.sh start
-
-# Stop the service
+```
+---
+- Stop the service
+```bash
 ./setup.sh stop
-
-# Restart the service
+```
+---
+- Restart the service
+```bash
 ./setup.sh restart
-
-# Check service status
+```
+---
+- Check service status
+```bash
 ./setup.sh status
-
-# View logs
+```
+---
+- View logs
+```bash
 ./setup.sh logs
 ```
 
-Example of starting and building a container
+Example of script running
 ```bash
-user@ai:~/gpu-monitor$ ./setup.sh start
+~/gpu-monitor ./setup.sh start
 [+] Checking prerequisites...
 [+] Docker: Found
 [+] Docker Compose: Found
@@ -154,24 +294,24 @@ Creating gpu-monitor ... done
 
 ## Data Persistence
 
-By default, all data is stored within the container for optimal performance and cleanup. If you need to persist data between container rebuilds, modify the docker-compose.yml:
+By default, all data is stored within the container will persist between container rebuilds, if you don't want that then remove volumes, modify the docker run or docker-compose.yml:
 
 ```yaml
 services:
   gpu-monitor:
     # ... other settings ...
     volumes:
-      - ./history:/app/history    # Persist historical data
-      - ./logs:/app/logs    # Persist logs
+      - ./history:/app/history    # Remove Persist historical data
+      - ./logs:/app/logs    # Remove Persist logs
 ```
 
 ## Alerts
 
-You can enable or disable alerts in ui, you can set thresholds for gpu temp, gpu utilization % and watts. Setting are saved in browser. 
+You can enable or disable alerts in ui, you can set thresholds for gpu temp, gpu utilization % and watts. Setting are saved in your browser if you make changes you only need to do it once, however you can always modify the code and rebuild the container to make it permanent.
+
 The defaults are: 
 
 ```bash
-this.thresholds = {
     temperature: 80,  
     utilization: 100,
     power: 300
@@ -188,6 +328,12 @@ In windows you can disable native alert notifications sound or disable gpu-monit
 1. **NVIDIA SMI not found**
    - Ensure NVIDIA drivers are installed
    - Verify NVIDIA Container Toolkit installation
+   - make sure you can run  
+
+```bash
+sudo docker run --rm --runtime=nvidia --gpus all ubuntu nvidia-smi
+```
+If this failed proceed to [Installation Prerequisites](#installation-prerequisites)
 
 2. **Container fails to start**
    - Check Docker logs: `docker logs gpu-monitor`
@@ -198,17 +344,14 @@ In windows you can disable native alert notifications sound or disable gpu-monit
    - Verify container is running: `docker ps`
    - Check container logs: `docker logs gpu-monitor`
    - Ensure port 8081 is not in use
-4. **Timezone is off**
+4. **TimeStamps don't match your local time**
 
-  Note: Replace America/Los_Angeles with your timezone if different. Common timezones:
+    - Replace `America/Los_Angeles` with your timezone
+[List of tz database time zones](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)
 
-US Eastern: America/New_York
-
-US Central: America/Chicago
-
-US Mountain: America/Denver
-
-US Pacific: America/Los_Angeles
+5. **I don't like the alert sound**
+    - Replace the .mp3 in the `sounds` folder and name it alert.mp3
+    - Getting double sounds from notifications disable one of them
 
 
 ## License
