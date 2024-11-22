@@ -107,10 +107,8 @@ A real-time NVIDIA GPU monitoring dashboard built with Docker for easy deploymen
 ## Prerequisites
 
 - Docker
-- NVIDIA GPU with drivers installed
+- NVIDIA GPU
 - NVIDIA Container Toolkit
-- Python 3.10+
-
 
 ## Quick Start
 
