@@ -167,6 +167,25 @@
             margin-bottom: 1rem;
         }
 
+        .metric-card.clickable {
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .metric-card.clickable:hover {
+            transform: translateY(-2px);
+        }
+        
+        .metric-card.metric-active {
+            border: 2px solid var(--primary);
+        }
+        
+        /* Increase chart container height */
+        .chart-container {
+            height: 400px;  /* Increase from 300px */
+            margin-top: 1rem;
+        }
+
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -249,11 +268,6 @@
             margin-bottom: 1rem;
             font-size: 0.875rem;
             color: var(--text-secondary);
-        }
-
-        .chart-container {
-            height: 300px;
-            margin-top: 1rem;
         }
 
         table {
@@ -403,9 +417,9 @@
     </div>
 </div>
 
-<!-- Current Metrics -->
+<!-- Current Metrics with clickable cards -->
 <div class="grid">
-    <div class="card metric-card">
+    <div class="card metric-card clickable metric-active" onclick="toggleGraphMetric('temperature')" data-metric="temperature">
         <div class="metric-label">Temperature</div>
         <div class="metric-value" id="temp-value">--°C</div>
         <div class="gauge">
@@ -413,7 +427,7 @@
         </div>
     </div>
 
-    <div class="card metric-card">
+    <div class="card metric-card clickable metric-active" onclick="toggleGraphMetric('utilization')" data-metric="utilization">
         <div class="metric-label">GPU Utilization</div>
         <div class="metric-value" id="util-value">--%</div>
         <div class="gauge">
@@ -421,7 +435,7 @@
         </div>
     </div>
 
-    <div class="card metric-card">
+    <div class="card metric-card clickable" onclick="toggleGraphMetric('memory')" data-metric="memory">
         <div class="metric-label">Memory Usage</div>
         <div class="metric-value" id="mem-value">-- MiB</div>
         <div class="gauge">
@@ -429,7 +443,7 @@
         </div>
     </div>
 
-    <div class="card metric-card">
+    <div class="card metric-card clickable" onclick="toggleGraphMetric('power')" data-metric="power">
         <div class="metric-label">Power Usage</div>
         <div class="metric-value" id="power-value">-- W</div>
         <div class="gauge">
@@ -708,28 +722,56 @@
             labels: [],
             datasets: [{
                 label: 'Temperature (°C)',
-                borderColor: '#f44336',
+                borderColor: '#f44336',  // Red
                 data: [],
                 tension: 0.4,
-                fill: false
+                fill: false,
+                hidden: false,  // Temperature visible by default
+                yAxisID: 'y'
             }, {
                 label: 'GPU Usage (%)',
-                borderColor: '#4caf50',
+                borderColor: '#4caf50',  // Green
                 data: [],
                 tension: 0.4,
-                fill: false
+                fill: false,
+                hidden: false,  // GPU Usage visible by default
+                yAxisID: 'y'
+            }, {
+                label: 'Memory (MiB)',
+                borderColor: '#ffffff',  // White
+                data: [],
+                tension: 0.4,
+                fill: false,
+                hidden: true,  // Memory hidden by default
+                yAxisID: 'y1'
+            }, {
+                label: 'Power (W)',
+                borderColor: '#9c27b0',  // Purple
+                data: [],
+                tension: 0.4,
+                fill: false,
+                hidden: true,  // Power hidden by default
+                yAxisID: 'y'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            aspectRatio: 3.5,
             animation: {
                 duration: 750,
                 easing: 'easeInOutQuart'
             },
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
             scales: {
                 y: {
+                    type: 'linear',
+                    position: 'left',
                     beginAtZero: true,
+                    max: 100,  // Increased from 100 to give more headroom on graph
                     grid: {
                         color: 'rgba(255, 255, 255, 0.1)'
                     },
@@ -737,13 +779,30 @@
                         color: '#b2bac2'
                     }
                 },
-                x: {
+                y1: {
+                    type: 'linear',
+                    position: 'right',
+                    beginAtZero: true,
                     grid: {
-                        color: 'rgba(255, 255, 255, 0.1)'
+                        drawOnChartArea: false
                     },
                     ticks: {
                         color: '#b2bac2'
+                    },
+                    // Add some padding to the max value
+                    suggestedMax: function(context) {
+                        const max = Math.max(...context.chart.data.datasets[2].data);
+                        return max * 1.1; // Add 10% padding
                     }
+                }
+            },
+            elements: {
+                point: {
+                    radius: 2,  // Make points more visible
+                    hoverRadius: 5
+                },
+                line: {
+                    borderWidth: 1  // Make lines slightly thicker
                 }
             },
             plugins: {
@@ -811,6 +870,35 @@
         document.getElementById('power-high').textContent = `High: ${power.max || '--'} W`;
     }
 
+    const visibleMetrics = {
+        temperature: true,
+        utilization: true,
+        memory: false,
+        power: false
+    };
+    
+    function toggleGraphMetric(metric) {
+        visibleMetrics[metric] = !visibleMetrics[metric];
+        
+        // Update chart visibility
+        const datasetMap = {
+            'temperature': 0,
+            'utilization': 1,
+            'memory': 2,
+            'power': 3
+        };
+        
+        const datasetIndex = datasetMap[metric];
+        const dataset = chart.data.datasets[datasetIndex];
+        dataset.hidden = !visibleMetrics[metric];
+        
+        // Add visual feedback to gauge card
+        const card = document.querySelector(`[data-metric="${metric}"]`);
+        card.classList.toggle('metric-active', visibleMetrics[metric]);
+        
+        chart.update();
+    }
+
     function updateChartForTimeframe(hours) {
         fetch('history/history.json')
             .then(response => response.json())
@@ -848,6 +936,8 @@
                 chart.data.labels = filteredData.timestamps;
                 chart.data.datasets[0].data = filteredData.temperatures;
                 chart.data.datasets[1].data = filteredData.utilizations;
+                chart.data.datasets[2].data = filteredData.memory;
+                chart.data.datasets[3].data = filteredData.power;
                 chart.update();
     
                 // Update performance indicators with filtered data
