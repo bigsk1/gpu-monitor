@@ -7,7 +7,8 @@
 
 A real-time lightweight NVIDIA GPU monitoring dashboard built with Docker for easy deployment and cross-platform compatibility.
 
-![GPU Monitor Dashboard](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/a081bac1-e86f-4833-91ad-a1d64c994200/public)
+https://github.com/user-attachments/assets/cd6cbe1f-33f0-47d5-8b30-29e4d08e90b4
+
 
 ##  Quick Navigation 🔍
 
@@ -237,7 +238,7 @@ The dashboard is accessible at: [http://localhost:8081](http://localhost:8081)
 
 --- 
 
-![GPU Monitor Dashboard](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/6b86a170-0ab3-4fb8-59fa-6437311a1c00/public)
+!![GPU Monitor Dashboard](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/a081bac1-e86f-4833-91ad-a1d64c994200/public)
 
 
 ## Alternative Setup Method
