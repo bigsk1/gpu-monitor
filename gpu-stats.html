@@ -212,6 +212,10 @@
             transition: width 0.3s ease, background-color 0.3s ease;
         }
 
+        .gauge-fill.success { background: var(--success); }
+        .gauge-fill.warning { background: var(--warning); }
+        .gauge-fill.danger { background: var(--danger); }
+
         .timeframe-selector {
             display: flex;
             gap: 0.5rem;
@@ -270,9 +274,9 @@
             letter-spacing: 0.05em;
         }
 
-        .success { background: var(--success); }
-        .warning { background: var(--warning); }
-        .danger { background: var(--danger); }
+        .success { background: var(--success); }  /* Green */
+        .warning { background: var(--warning); }  /* Yellow */
+        .danger { background: var(--danger); }    /* Red */
 
         tr {
             transition: background-color 0.3s ease;
@@ -622,30 +626,25 @@
         }
     
         checkThresholds(data) {
-            console.log('Checking thresholds:', {
-                current: data,
-                thresholds: this.thresholds
-            });
-            
             const currentTime = Date.now();
             
             if (data.temperature > this.thresholds.temperature) {
                 if (currentTime - (this.lastAlertTime.temp || 0) > this.ALERT_COOLDOWN) {
-                    this.triggerAlert('temperature', data.temperature, '°C');
+                    this.triggerAlert('temp', data.temperature, '°C');  // Changed from 'temperature'
                     this.lastAlertTime.temp = currentTime;
                 }
             }
-    
+        
             if (data.utilization > this.thresholds.utilization) {
                 if (currentTime - (this.lastAlertTime.util || 0) > this.ALERT_COOLDOWN) {
-                    this.triggerAlert('utilization', data.utilization, '%');
+                    this.triggerAlert('util', data.utilization, '%');  // Changed from 'utilization'
                     this.lastAlertTime.util = currentTime;
                 }
             }
-    
+        
             if (data.power > this.thresholds.power) {
                 if (currentTime - (this.lastAlertTime.power || 0) > this.ALERT_COOLDOWN) {
-                    this.triggerAlert('power', data.power, 'W');
+                    this.triggerAlert('power', data.power, 'W');  // This one was correct
                     this.lastAlertTime.power = currentTime;
                 }
             }
@@ -777,8 +776,12 @@
     function updateGaugeColor(value, element, max = 100) {
         const percentage = (value / max) * 100;
         let colorClass = 'success';
-        if (percentage > 70) colorClass = 'danger';
-        else if (percentage > 50) colorClass = 'warning';
+        
+        if (percentage > 70) {
+            colorClass = 'danger';
+        } else if (percentage > 50) {
+            colorClass = 'warning';
+        }
         
         element.className = 'gauge-fill ' + colorClass;
         element.style.width = Math.min(percentage, 100) + '%';
