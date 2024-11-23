@@ -239,6 +239,8 @@
             display: flex;
             gap: 0.5rem;
             margin-bottom: 1rem;
+            flex-wrap: wrap; /* Allow buttons to wrap on mobile */
+            justify-content: center; /* Center the wrapped buttons */
         }
 
         .timeframe-btn {
@@ -249,6 +251,9 @@
             border-radius: 0.25rem;
             cursor: pointer;
             transition: all 0.3s ease;
+            min-width: 85px; /* Ensure consistent button width */
+            margin-bottom: 0.5rem; /* Add space between wrapped rows */
+            font-size: 0.9rem; /* Slightly smaller font on mobile */
         }
 
         .timeframe-btn.active {
@@ -348,6 +353,15 @@
             
             .grid {
                 grid-template-columns: 1fr;
+            }
+
+            .timeframe-selector {
+                gap: 0.25rem; /* Smaller gap on mobile */
+            }
+            
+            .timeframe-btn {
+                padding: 0.4rem 0.8rem; /* Slightly smaller padding */
+                min-width: 70px; /* Smaller minimum width on mobile */
             }
         }
     </style>
