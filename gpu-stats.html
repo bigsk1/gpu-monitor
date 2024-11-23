@@ -56,12 +56,63 @@
             box-sizing: border-box;
         }
 
+        .arrow {
+            transition: transform 0.3s ease;
+            user-select: none;
+            font-size: 1.2rem;  /* Make arrow bigger */
+            cursor: pointer;
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            cursor: pointer;
+            user-select: none;  /* Prevent text selection when clicking */
+        }
+
         body {
             background-color: var(--bg-dark);
             color: var(--text-primary);
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             line-height: 1.5;
             padding: 2rem;
+        }
+
+        .card h2 {
+            font-size: 1.5rem;  /* Adjust title size */
+            margin-bottom: 1rem; /* Space below title */
+            padding: 0.5rem 0;   /* Padding above/below title */
+        }
+        
+        /* For collapsible sections, adjust the header */
+        .card-header h2 {
+            font-size: 1.5rem;
+            margin: 0;  /* Remove margin since the header has padding */
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            cursor: pointer;
+        }
+        
+        .arrow {
+            transition: transform 0.3s ease;
+            user-select: none;
+        }
+        
+        .card-content {
+            max-height: 1000px;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        
+        .card-content.collapsed {
+            max-height: 0;
         }
 
         .dashboard {
@@ -129,6 +180,23 @@
             color: var(--text-secondary);
             font-size: 0.875rem;
             margin-top: 0.5rem;
+        }
+
+        .stats-grid .metric-value {
+            font-size: 1.8rem;  /* Smaller than current 2rem */
+            font-weight: 600;
+        }
+
+        .stats-grid .metric-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .stats-grid .stat-range {
+            font-size: 1rem;  /* Consistent size for low and high font in 24hr top box*/
+            opacity: 0.9;
+            color: var(--text-secondary);
         }
 
         .gauge {
@@ -367,21 +435,25 @@
 </div>
 
 <!-- Recent Statistics -->
-<div class="card">
-    <h2>Recent Statistics</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Timestamp</th>
-                <th>Temperature</th>
-                <th>GPU Usage</th>
-                <th>Memory</th>
-                <th>Power</th>
-            </tr>
-        </thead>
-        <tbody id="stats-table-body"></tbody>
-    </table>
-</div>
+<div class="card" id="recentStatsCard">
+    <div class="card-header" onclick="toggleSection('recentStats')">
+        <h2>Recent Statistics</h2>
+        <span class="arrow">▼</span>
+    </div>
+    <div id="recentStatsContent" class="card-content">
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Temperature</th>
+                    <th>GPU Usage</th>
+                    <th>Memory</th>
+                    <th>Power</th>
+                </tr>
+            </thead>
+            <tbody id="stats-table-body"></tbody>
+        </table>
+    </div>
 </div>
 <script>
     class AlertSystem {
@@ -480,9 +552,13 @@
     
         initUI() {
             const settingsHtml = `
-                <div class="card">
-                    <h2>Alert Settings</h2>
-                    <div class="alert-settings">
+                <div class="card" id="alertSettingsCard">
+                    <div class="card-header" onclick="toggleSection('alertSettings')">
+                        <h2>Alert Settings</h2>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div id="alertSettingsContent" class="card-content">
+                        <div class="alert-settings">
                         <div class="setting">
                             <label>Temperature Threshold (°C)</label>
                             <input type="number" id="tempThreshold" value="${this.thresholds.temperature}">
@@ -506,7 +582,7 @@
                     </div>
                 </div>
             `;
-    
+
             document.querySelector('.dashboard').insertAdjacentHTML('beforeend', settingsHtml);
             
             // Set up event listeners
@@ -718,7 +794,7 @@
         
         // Update utilization ranges
         const util = stats.utilization || {};
-        document.getElementById('util-low').textContent = `Low: ${util.min || '--'}%`;
+        document.getElementById('util-low').textContent = `Low: ${util.min === 0 || util.min ? util.min : '--'}%`;
         document.getElementById('util-high').textContent = `High: ${util.max || '--'}%`;
         
         // Update memory ranges
@@ -807,9 +883,48 @@
 
     function smoothlyUpdateText(element, newValue, unit = '') {
         if (element) {
-            element.textContent = `${Number(newValue).toFixed(1)}${unit}`;
+            // Special handling for MiB values - no decimals
+            if (unit.includes('MiB')) {
+                element.textContent = `${Math.round(newValue)}${unit}`;
+            } else {
+                // Keep decimal places for other metrics
+                element.textContent = `${Number(newValue).toFixed(1)}${unit}`;
+            }
         }
     }
+
+    // Move this outside the AlertSystem class
+    function toggleSection(sectionId) {
+        const card = document.getElementById(`${sectionId}Card`);
+        const content = document.getElementById(`${sectionId}Content`);
+        const arrow = card.querySelector('.arrow');
+        const isCollapsed = content.classList.contains('collapsed');
+        
+        // Toggle collapse state
+        content.classList.toggle('collapsed');
+        arrow.style.transform = isCollapsed ? 'rotate(0deg)' : 'rotate(-90deg)';
+        
+        // Save state to localStorage
+        localStorage.setItem(`${sectionId}Collapsed`, !isCollapsed);
+    }
+
+    // Restore states on page load
+    function restoreCollapsedStates() {
+        ['recentStats', 'alertSettings'].forEach(sectionId => {
+            const isCollapsed = localStorage.getItem(`${sectionId}Collapsed`) === 'true';
+            const card = document.getElementById(`${sectionId}Card`);
+            const content = card?.querySelector('.card-content');
+            const arrow = card?.querySelector('.arrow');
+            
+            if (isCollapsed && content && arrow) {
+                content.classList.add('collapsed');
+                arrow.style.transform = 'rotate(-90deg)';
+            }
+        });
+    }
+
+    // Call when page loads
+    document.addEventListener('DOMContentLoaded', restoreCollapsedStates);
 
     function updateStats() {
         Promise.all([
@@ -850,7 +965,7 @@
                     <td>${currentData.timestamp}</td>
                     <td>${currentData.temperature.toFixed(1)}°C</td>
                     <td>${currentData.utilization}%</td>
-                    <td>${currentData.memory} MiB</td>
+                    <td>${Math.round(currentData.memory)} MiB</td>
                     <td>${currentData.power.toFixed(2)} W</td>
                 `;
 
