@@ -7,7 +7,7 @@
 
 A real-time lightweight NVIDIA GPU monitoring dashboard built with Docker for easy deployment and cross-platform compatibility.
 
-![GPU Monitor Dashboard](images/monitor-ui.png)
+![GPU Monitor Dashboard](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/a081bac1-e86f-4833-91ad-a1d64c994200/public)
 
 ##  Quick Navigation 🔍
 
@@ -237,7 +237,7 @@ The dashboard is accessible at: [http://localhost:8081](http://localhost:8081)
 
 --- 
 
-![GPU Monitor Dashboard](images/collapse.png)
+![GPU Monitor Dashboard](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/6b86a170-0ab3-4fb8-59fa-6437311a1c00/public)
 
 
 ## Alternative Setup Method
@@ -318,7 +318,7 @@ The defaults are:
     power: 300
 ```
 
-![GPU Monitor Dashboard](images/alerts.png)
+![GPU Monitor Dashboard](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/6799f2b8-aac2-4741-d125-3b4ed7496e00/public)
 
 
 ## Troubleshooting
@@ -356,11 +356,11 @@ If this failed proceed to [Installation Prerequisites](#installation-prerequisit
 ## Mobile Layout
 
 <p align="center">
-  <img src="images/mobile-gauges.png" alt="GPU Monitor Dashboard Mobile Temp" width="300">
+  <img src="https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/3b772d51-8bd6-4d77-5147-25b15170a900/public" alt="GPU Monitor Dashboard Mobile Temp" width="300">
 </p>
 
 <p align="center">
-  <img src="images/mobile-stats.png" alt="GPU Monitor Dashboard Mobile Stats" width="300">
+  <img src="https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/c0176433-9449-4243-d3cf-835c198f5500/public" alt="GPU Monitor Dashboard Mobile Stats" width="300">
 </p>
 
 
