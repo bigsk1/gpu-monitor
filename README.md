@@ -7,7 +7,7 @@
 
 A real-time lightweight NVIDIA GPU monitoring dashboard built with Docker for easy deployment and cross-platform compatibility.
 
-![GPU Monitor Dashboard](images/gpu.png)
+![GPU Monitor Dashboard](images/gpu-ui.png)
 
 ##  Quick Navigation 🔍
 
