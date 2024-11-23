@@ -7,7 +7,7 @@
 
 A real-time lightweight NVIDIA GPU monitoring dashboard built with Docker for easy deployment and cross-platform compatibility.
 
-![GPU Monitor Dashboard](images/gpu-ui.png)
+![GPU Monitor Dashboard](images/monitor-ui.png)
 
 ##  Quick Navigation 🔍
 
@@ -98,13 +98,13 @@ A real-time lightweight NVIDIA GPU monitoring dashboard built with Docker for ea
 
 - Real-time GPU metrics monitoring
 - Interactive web dashboard
-- Historical data tracking (1h, 6h, 12h, 24h)
+- Historical data tracking (15m, 30m, 1h, 6h, 12h, 24h)
 - Temperature, utilization, memory, and power monitoring
 - Docker-based for easy deployment
-- Your GPU name shown in UI
 - Persist history between new containers
 - Real time alerts - sound and notification
 - Responsive theme for any size screen
+- Toggle gauges on or off to show metrics in graph
 
 ## Prerequisites
 
@@ -237,7 +237,7 @@ The dashboard is accessible at: [http://localhost:8081/gpu-stats.html](http://lo
 
 --- 
 
-![GPU Monitor Dashboard](images/gpu2.jpg)
+![GPU Monitor Dashboard](images/collapse.png)
 
 
 ## Alternative Setup Method
@@ -318,7 +318,7 @@ The defaults are:
     power: 300
 ```
 
-![GPU Monitor Dashboard](images/graph-small.png)
+![GPU Monitor Dashboard](images/alerts.png)
 
 
 ## Troubleshooting
@@ -352,6 +352,16 @@ If this failed proceed to [Installation Prerequisites](#installation-prerequisit
 5. **I don't like the alert sound**
     - Replace the .mp3 in the `sounds` folder and name it alert.mp3
     - Getting double sounds from notifications, disable windows notifications or disable it in ui.
+
+## Mobile Layout
+
+<p align="center">
+  <img src="images/mobile-gauges.png" alt="GPU Monitor Dashboard Mobile Temp" width="300">
+</p>
+
+<p align="center">
+  <img src="images/mobile-stats.png" alt="GPU Monitor Dashboard Mobile Stats" width="300">
+</p>
 
 
 ## License

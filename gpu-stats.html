@@ -401,6 +401,8 @@
 <div class="card">
     <h2>Performance History</h2>
     <div class="timeframe-selector">
+        <button class="timeframe-btn" data-hours="0.25">15 Min</button>
+        <button class="timeframe-btn" data-hours="0.5">30 Min</button>
         <button class="timeframe-btn active" data-hours="1">1 Hour</button>
         <button class="timeframe-btn" data-hours="6">6 Hours</button>
         <button class="timeframe-btn" data-hours="12">12 Hours</button>
@@ -714,6 +716,8 @@
     // Call this at startup
     updateGPUName();
 
+    let currentTimeframe = 1; // default to 1 hour
+
     // Initialize Chart.js
     const ctx = document.getElementById('historyChart').getContext('2d');
     const chart = new Chart(ctx, {
@@ -827,10 +831,10 @@
             document.querySelectorAll('.timeframe-btn').forEach(b => 
                 b.classList.remove('active'));
             button.classList.add('active');
-            const hours = parseInt(button.dataset.hours);
-            updateChartForTimeframe(hours);
+            currentTimeframe = Number(button.dataset.hours);  // Store the selected timeframe
+            updateChartForTimeframe(currentTimeframe);
         });
-    }); 
+    });
 
     function updateGaugeColor(value, element, max = 100) {
         const percentage = (value / max) * 100;
@@ -907,11 +911,20 @@
                     console.warn('No data available');
                     return;
                 }
-    
-                // Filter data based on selected timeframe
-                const cutoff = new Date();
-                cutoff.setHours(cutoff.getHours() - hours);
                 
+                // Calculate cutoff time with explicit handling of time frames
+                const cutoff = new Date();
+                if (hours === 0.25) {
+                    cutoff.setMinutes(cutoff.getMinutes() - 15);
+                    console.log('Setting 15 minute timeframe');
+                } else if (hours === 0.5) {
+                    cutoff.setMinutes(cutoff.getMinutes() - 30);
+                    console.log('Setting 30 minute timeframe');
+                } else {
+                    cutoff.setHours(cutoff.getHours() - hours);
+                    console.log(`Setting ${hours} hour timeframe`);
+                }
+    
                 const currentYear = new Date().getFullYear();
                 const filteredData = {
                     timestamps: [],
@@ -940,7 +953,7 @@
                 chart.data.datasets[3].data = filteredData.power;
                 chart.update();
     
-                // Update performance indicators with filtered data
+                // Update performance indicators
                 document.getElementById('peak-temp').textContent = 
                     `${Math.max(...filteredData.temperatures)}°C`;
                 document.getElementById('avg-util').textContent = 
@@ -1020,13 +1033,32 @@
     document.addEventListener('DOMContentLoaded', restoreCollapsedStates);
 
     function updateStats() {
+        const defaultStats = {
+            stats: {
+                temperature: {min: 0, max: 0},
+                utilization: {min: 0, max: 0},
+                memory: {min: 0, max: 0},
+                power: {min: 0, max: 0}
+            }
+        };
+    
         Promise.all([
             fetch('gpu_current_stats.json'),
-            fetch('gpu_24hr_stats.txt').catch(() => ({ text: () => '{}' }))
+            fetch('gpu_24hr_stats.txt')
+                .then(response => {
+                    if (!response.ok) {
+                        return defaultStats;
+                    }
+                    return response.text();
+                })
+                .catch(() => defaultStats)
         ])
-        .then(([currentResponse, statsResponse]) => 
-            Promise.all([currentResponse.json(), statsResponse.text()])
-        )
+        .then(([currentResponse, statsResponse]) => {
+            return Promise.all([
+                currentResponse.json(),
+                typeof statsResponse === 'string' ? statsResponse : JSON.stringify(statsResponse)
+            ]);
+        })
         .then(([currentData, statsText]) => {
             // Update current metrics
             smoothlyUpdateText(document.getElementById('temp-value'), currentData.temperature, '°C');
@@ -1089,7 +1121,7 @@
         const activeButton = document.querySelector('.timeframe-btn.active');
         if (activeButton) {
             const hours = parseInt(activeButton.dataset.hours);
-            updateChartForTimeframe(hours);
+            updateChartForTimeframe(currentTimeframe);  // Use the stored timeframe
         }
     }
 
@@ -1106,16 +1138,6 @@
         }
     };
 
-    // timeframe button initialization:
-    document.querySelectorAll('.timeframe-btn').forEach(button => {
-        button.addEventListener('click', () => {
-            document.querySelectorAll('.timeframe-btn').forEach(b => 
-                b.classList.remove('active'));
-            button.classList.add('active');
-            selectedTimeframe = parseInt(button.dataset.hours);
-            updateChartForTimeframe(selectedTimeframe);
-        });
-    });
     updateStats();
     setInterval(updateStats, 5000);
     setInterval(updateChart, 30000);
