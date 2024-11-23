@@ -62,7 +62,7 @@ start_service() {
     
     if [ $? -eq 0 ]; then
         print_status "GPU Monitor started successfully!"
-        print_status "Dashboard available at: http://localhost:8081/gpu-stats.html"
+        print_status "Dashboard available at: http://localhost:8081"
         print_status "To check logs: docker-compose logs -f"
     else
         print_error "Failed to start GPU Monitor."

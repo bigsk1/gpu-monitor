@@ -151,7 +151,7 @@ cd gpu-monitor
 docker-compose up -d
 ```
 
-3. Access the dashboard at: [http://localhost:8081/gpu-stats.html](http://localhost:8081/gpu-stats.html)
+3. Access the dashboard at: [http://localhost:8081](http://localhost:8081)
 
 
 
@@ -232,7 +232,7 @@ docker run -d \
 
 ## Configuration
 
-The dashboard is accessible at: [http://localhost:8081/gpu-stats.html](http://localhost:8081/gpu-stats.html)
+The dashboard is accessible at: [http://localhost:8081](http://localhost:8081)
  by default. To change the port, modify the `docker-compose.yml` file or the `-p` parameter in the docker run command.
 
 --- 
@@ -288,7 +288,7 @@ Example of script running
 Creating network "gpu-monitor_default" with the default driver
 Creating gpu-monitor ... done
 [+] GPU Monitor started successfully!
-[+] Dashboard available at: http://localhost:8081/gpu-stats.html
+[+] Dashboard available at: http://localhost:8081
 [+] To check logs: docker-compose logs -f
 ```
 

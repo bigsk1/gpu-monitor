@@ -20,5 +20,5 @@ app.router.add_get('/{tail:.*}', handle_static)
 if __name__ == '__main__':
     logger.info("Starting GPU Monitor Server")
     logger.info("Serving on port: 8081")
-    logger.info("Dashboard available at: http://localhost:8081/gpu-stats.html")
+    logger.info("Dashboard available at: http://localhost:8081")
     web.run_app(app, port=8081, access_log=None)
