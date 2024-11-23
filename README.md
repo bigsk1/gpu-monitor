@@ -238,7 +238,7 @@ The dashboard is accessible at: [http://localhost:8081](http://localhost:8081)
 
 --- 
 
-!![GPU Monitor Dashboard](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/a081bac1-e86f-4833-91ad-a1d64c994200/public)
+![GPU Monitor Dashboard](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/a081bac1-e86f-4833-91ad-a1d64c994200/public)
 
 
 ## Alternative Setup Method
@@ -366,6 +366,4 @@ If this failed proceed to [Installation Prerequisites](#installation-prerequisit
 
 
 ## License
-[![License](https://img.shields.io/github/license/bigsk1/gpu-monitor)](https://github.com/bigsk1/gpu-monitor/blob/main/LICENSE) 
-
-see [LICENSE](LICENSE) file for details.
+[![License](https://img.shields.io/github/license/bigsk1/gpu-monitor)](https://github.com/bigsk1/gpu-monitor/blob/main/LICENSE)
