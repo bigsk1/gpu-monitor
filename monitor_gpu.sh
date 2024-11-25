@@ -92,12 +92,17 @@ data_buffer = []
 for line in sys.stdin:
     try:
         timestamp, temp, util, mem, power = line.strip().split(',')
+        try:
+            power_val = float(power) if power.strip() != 'N/A' else 0
+        except (ValueError, AttributeError):
+            power_val = 0
+
         data_buffer.append({
             "timestamp": timestamp,
             "temperature": float(temp),
             "utilization": float(util),
             "memory": float(mem),
-            "power": float(power)
+            "power": power_val
         })
         
         if len(data_buffer) >= BATCH_SIZE:
@@ -144,7 +149,7 @@ process_24hr_stats() {
         return
     fi
 
-    cat > /tmp/process_stats.py << 'EOF'
+ cat > /tmp/process_stats.py << 'EOF'
 import sys
 from datetime import datetime, timedelta
 import json
@@ -166,7 +171,11 @@ for line in sys.stdin:
             temp = float(temp)
             util = float(util)
             mem = float(mem)
-            power = float(power)
+            # Handle N/A power values
+            try:
+                power = float(power) if power.strip() != 'N/A' else 0
+            except (ValueError, AttributeError):
+                power = 0
             
             temp_min = min(temp_min, temp)
             temp_max = max(temp_max, temp)
@@ -174,14 +183,19 @@ for line in sys.stdin:
             util_max = max(util_max, util)
             mem_min = min(mem_min, mem)
             mem_max = max(mem_max, mem)
-            power_min = min(power_min, power)
-            power_max = max(power_max, power)
+            if power > 0:  # Only update power min/max if power is reported
+                power_min = min(power_min, power)
+                power_max = max(power_max, power)
     except:
         continue
 
 # Handle case where no data was processed
 if temp_min == float('inf'):
-    temp_min = temp_max = util_min = util_max = mem_min = mem_max = power_min = power_max = 0
+    temp_min = temp_max = util_min = util_max = mem_min = mem_max = 0
+
+# Special handling for power stats when not available
+if power_min == float('inf') or power_max == float('-inf'):
+    power_min = power_max = 0
 
 stats = {
     "stats": {
@@ -238,6 +252,8 @@ rotate_logs() {
 update_stats() {
     # Get current stats
     local timestamp=$(date '+%m-%d %H:%M:%S')
+    # For testing, replace the nvidia-smi command with:
+    # local gpu_stats="44, 0, 3, N/A"
     local gpu_stats=$(nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,memory.used,power.draw \
                      --format=csv,noheader,nounits 2>/dev/null)
     
@@ -250,6 +266,11 @@ update_stats() {
         local util=$(echo "$gpu_stats" | cut -d',' -f2 | tr -d ' ')
         local mem=$(echo "$gpu_stats" | cut -d',' -f3 | tr -d ' ')
         local power=$(echo "$gpu_stats" | cut -d',' -f4 | tr -d ' ')
+
+        # Handle N/A power value
+        if [[ "$power" == "N/A" || -z "$power" ]]; then
+            power="0"  # Using 0 as default for N/A power values
+        fi
 
         cat > "$JSON_FILE" << EOF
 {

@@ -367,3 +367,7 @@ If this failed proceed to [Installation Prerequisites](#installation-prerequisit
 
 ## License
 [![License](https://img.shields.io/github/license/bigsk1/gpu-monitor)](https://github.com/bigsk1/gpu-monitor/blob/main/LICENSE)
+
+Docker Scout Score
+
+![Docker Scout](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/969b5bc9-6c2c-44c7-32a8-359287378a00/public)

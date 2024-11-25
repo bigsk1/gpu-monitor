@@ -858,14 +858,14 @@
     });
 
     function updateGaugeColor(value, element, max = 100) {
+        // Handle N/A or invalid values
+        if (value === 'N/A' || value === null || isNaN(value)) {
+            value = 0;
+        }
         const percentage = (value / max) * 100;
         let colorClass = 'success';
-        
-        if (percentage > 70) {
-            colorClass = 'danger';
-        } else if (percentage > 50) {
-            colorClass = 'warning';
-        }
+        if (percentage > 70) colorClass = 'danger';
+        else if (percentage > 50) colorClass = 'warning';
         
         element.className = 'gauge-fill ' + colorClass;
         element.style.width = Math.min(percentage, 100) + '%';
@@ -932,20 +932,16 @@
                     console.warn('No data available');
                     return;
                 }
-                
-                // Calculate cutoff time with explicit handling of time frames
+    
                 const cutoff = new Date();
                 if (hours === 0.25) {
                     cutoff.setMinutes(cutoff.getMinutes() - 15);
-                    console.log('Setting 15 minute timeframe');
                 } else if (hours === 0.5) {
                     cutoff.setMinutes(cutoff.getMinutes() - 30);
-                    console.log('Setting 30 minute timeframe');
                 } else {
                     cutoff.setHours(cutoff.getHours() - hours);
-                    console.log(`Setting ${hours} hour timeframe`);
                 }
-    
+                
                 const currentYear = new Date().getFullYear();
                 const filteredData = {
                     timestamps: [],
@@ -959,10 +955,11 @@
                     const dt = new Date(`${currentYear} ${timestamp}`);
                     if (dt >= cutoff) {
                         filteredData.timestamps.push(timestamp);
-                        filteredData.temperatures.push(data.temperatures[i]);
-                        filteredData.utilizations.push(data.utilizations[i]);
-                        filteredData.memory.push(data.memory[i]);
-                        filteredData.power.push(data.power[i]);
+                        // Ensure all values are valid numbers
+                        filteredData.temperatures.push(Number(data.temperatures[i]) || 0);
+                        filteredData.utilizations.push(Number(data.utilizations[i]) || 0);
+                        filteredData.memory.push(Number(data.memory[i]) || 0);
+                        filteredData.power.push(Number(data.power[i]) || 0);
                     }
                 });
     
@@ -972,22 +969,26 @@
                 chart.data.datasets[1].data = filteredData.utilizations;
                 chart.data.datasets[2].data = filteredData.memory;
                 chart.data.datasets[3].data = filteredData.power;
-                chart.update();
+                chart.update('none'); // Use 'none' to disable animation if needed
     
-                // Update performance indicators
-                document.getElementById('peak-temp').textContent = 
-                    `${Math.max(...filteredData.temperatures)}°C`;
-                document.getElementById('avg-util').textContent = 
-                    `${(filteredData.utilizations.reduce((a, b) => a + b, 0) / filteredData.utilizations.length).toFixed(1)}%`;
-                document.getElementById('max-mem').textContent = 
-                    `${Math.max(...filteredData.memory)} MiB`;
-                
-                const avgPower = filteredData.power.reduce((a, b) => a + b, 0) / filteredData.power.length;
-                const avgUtil = filteredData.utilizations.reduce((a, b) => a + b, 0) / filteredData.utilizations.length || 1;
-                document.getElementById('power-efficiency').textContent = 
-                    `${(avgPower / avgUtil).toFixed(1)} W/%`;
+                // performance indicators
+                if (filteredData.timestamps.length > 0) {
+                    document.getElementById('peak-temp').textContent = 
+                        `${Math.max(...filteredData.temperatures)}°C`;
+                    document.getElementById('avg-util').textContent = 
+                        `${(filteredData.utilizations.reduce((a, b) => a + b, 0) / filteredData.utilizations.length).toFixed(1)}%`;
+                    document.getElementById('max-mem').textContent = 
+                        `${Math.max(...filteredData.memory)} MiB`;
+                    
+                    const avgPower = filteredData.power.reduce((a, b) => a + b, 0) / filteredData.power.length;
+                    const avgUtil = filteredData.utilizations.reduce((a, b) => a + b, 0) / filteredData.utilizations.length || 1;
+                    document.getElementById('power-efficiency').textContent = 
+                        `${(avgPower / avgUtil).toFixed(1)} W/%`;
+                }
             })
-            .catch(error => console.error('Error loading historical data:', error));
+            .catch(error => {
+                console.error('Error updating chart:', error);
+            });
     }
 
     function updateTimeframeStats(data) {
@@ -1010,6 +1011,12 @@
 
     function smoothlyUpdateText(element, newValue, unit = '') {
         if (element) {
+            // Handle N/A or invalid values
+            if (newValue === 'N/A' || newValue === null || isNaN(newValue)) {
+                element.textContent = '--' + unit;
+                return;
+            }
+    
             // Special handling for MiB values - no decimals
             if (unit.includes('MiB')) {
                 element.textContent = `${Math.round(newValue)}${unit}`;
