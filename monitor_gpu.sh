@@ -253,7 +253,7 @@ update_stats() {
     # Get current stats
     local timestamp=$(date '+%m-%d %H:%M:%S')
     # For testing, replace the nvidia-smi command with:
-    # local gpu_stats="44, 0, 3, N/A"
+    # local gpu_stats="44, 0, 3, [N/A]"
     local gpu_stats=$(nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,memory.used,power.draw \
                      --format=csv,noheader,nounits 2>/dev/null)
     
@@ -265,10 +265,10 @@ update_stats() {
         local temp=$(echo "$gpu_stats" | cut -d',' -f1 | tr -d ' ')
         local util=$(echo "$gpu_stats" | cut -d',' -f2 | tr -d ' ')
         local mem=$(echo "$gpu_stats" | cut -d',' -f3 | tr -d ' ')
-        local power=$(echo "$gpu_stats" | cut -d',' -f4 | tr -d ' ')
+        local power=$(echo "$gpu_stats" | cut -d',' -f4 | tr -d ' []')  # Remove both [ and ]
 
-        # Handle N/A power value
-        if [[ "$power" == "N/A" || -z "$power" ]]; then
+        # Handle N/A power value - now handles both N/A and [N/A]
+        if [[ "$power" == "N/A" || -z "$power" || "$power" == "[N/A]" ]]; then
             power="0"  # Using 0 as default for N/A power values
         fi
 
