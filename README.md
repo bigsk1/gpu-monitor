@@ -354,6 +354,9 @@ If this failed proceed to [Installation Prerequisites](#installation-prerequisit
     - Replace the .mp3 in the `sounds` folder and name it alert.mp3
     - Getting double sounds from notifications, disable windows notifications or disable it in ui.
 
+6. **Updated Nvidia driver and UI metrics seem stuck**
+    - The connection to the nvidia runtime was interrupted, restart the container.
+
 ## Mobile Layout
 
 <p align="center">

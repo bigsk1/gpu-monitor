@@ -834,6 +834,11 @@
                 legend: {
                     labels: {
                         color: '#b2bac2'
+                    },
+                    onClick: (evt, legendItem, legend) => {
+                        const index = legendItem.datasetIndex;
+                        const metric = ['temperature', 'utilization', 'memory', 'power'][index];
+                        toggleGraphMetric(metric, true);
                     }
                 }
             }
@@ -902,10 +907,9 @@
         power: false
     };
     
-    function toggleGraphMetric(metric) {
+    function toggleGraphMetric(metric, fromLegend = false) {
         visibleMetrics[metric] = !visibleMetrics[metric];
         
-        // Update chart visibility
         const datasetMap = {
             'temperature': 0,
             'utilization': 1,
@@ -921,7 +925,12 @@
         const card = document.querySelector(`[data-metric="${metric}"]`);
         card.classList.toggle('metric-active', visibleMetrics[metric]);
         
-        chart.update();
+        // If from legend click, immediately update chart data
+        if (fromLegend) {
+            updateChartForTimeframe(currentTimeframe);  // Immediate update
+        } else {
+            chart.update();  // Simple visibility toggle
+        }
     }
 
     function updateChartForTimeframe(hours) {

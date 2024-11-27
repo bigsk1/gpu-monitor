@@ -132,7 +132,7 @@ PYTHONSCRIPT
 
     if [ -s "$temp_file" ]; then
         mv "$temp_file" "$output_file"
-        chmod 666 "$output_file"
+        #chmod 666 "$output_file"
         log_debug "Updated history file"
     else
         log_error "Failed to create history file"
@@ -248,12 +248,74 @@ rotate_logs() {
     rotate_log_file "$LOG_FILE"
 }
 
+# rotate_logs function
+function rotate_history() {
+    local history_file="$HISTORY_DIR/history.json"
+    local max_days=7  # Keep one week of history
+    
+    if [ -f "$history_file" ]; then
+        # Create a Python script to trim old data
+        cat > /tmp/trim_history.py << 'PYTHONSCRIPT'
+import json
+import sys
+from datetime import datetime, timedelta
+
+# Read existing history
+with open(sys.argv[1], 'r') as f:
+    data = json.load(f)
+
+# Calculate cutoff date
+cutoff = datetime.now() - timedelta(days=int(sys.argv[2]))
+current_year = datetime.now().year
+
+# Filter data
+filtered_indices = []
+for i, timestamp in enumerate(data['timestamps']):
+    dt = datetime.strptime(f"{current_year} {timestamp}", "%Y %m-%d %H:%M:%S")
+    if dt >= cutoff:
+        filtered_indices.append(i)
+
+# Create new filtered data
+filtered_data = {
+    'timestamps': [data['timestamps'][i] for i in filtered_indices],
+    'temperatures': [data['temperatures'][i] for i in filtered_indices],
+    'utilizations': [data['utilizations'][i] for i in filtered_indices],
+    'memory': [data['memory'][i] for i in filtered_indices],
+    'power': [data['power'][i] for i in filtered_indices]
+}
+
+# Write filtered data back
+with open(sys.argv[1], 'w') as f:
+    json.dump(filtered_data, f, indent=4)
+PYTHONSCRIPT
+
+        python3 /tmp/trim_history.py "$history_file" "$max_days"
+        rm /tmp/trim_history.py
+    fi
+}
+
+# safeguard functions
+function process_buffer() {
+    # Atomic write using temp file
+    local temp_file="${BUFFER_FILE}.tmp"
+    cat "$BUFFER_FILE" > "$temp_file"
+    > "$BUFFER_FILE"  # Clear original buffer
+    cat "$temp_file" >> "$LOG_FILE"
+    rm "$temp_file"
+}
+
+function safe_write_json() {
+    local file="$1"
+    local content="$2"
+    local temp="${file}.tmp"
+    
+    echo "$content" > "$temp"
+    mv "$temp" "$file"  # Atomic move
+}
+
 # Update the update_stats function
 update_stats() {
-    # Get current stats
     local timestamp=$(date '+%m-%d %H:%M:%S')
-    # For testing, replace the nvidia-smi command with:
-    # local gpu_stats="44, 0, 3, [N/A]"
     local gpu_stats=$(nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,memory.used,power.draw \
                      --format=csv,noheader,nounits 2>/dev/null)
     
@@ -265,14 +327,15 @@ update_stats() {
         local temp=$(echo "$gpu_stats" | cut -d',' -f1 | tr -d ' ')
         local util=$(echo "$gpu_stats" | cut -d',' -f2 | tr -d ' ')
         local mem=$(echo "$gpu_stats" | cut -d',' -f3 | tr -d ' ')
-        local power=$(echo "$gpu_stats" | cut -d',' -f4 | tr -d ' []')  # Remove both [ and ]
+        local power=$(echo "$gpu_stats" | cut -d',' -f4 | tr -d ' []')
 
-        # Handle N/A power value - now handles both N/A and [N/A]
+        # Handle N/A power value
         if [[ "$power" == "N/A" || -z "$power" || "$power" == "[N/A]" ]]; then
-            power="0"  # Using 0 as default for N/A power values
+            power="0"
         fi
 
-        cat > "$JSON_FILE" << EOF
+        # Create JSON content
+        local json_content=$(cat << EOF
 {
     "timestamp": "$timestamp",
     "temperature": $temp,
@@ -281,15 +344,15 @@ update_stats() {
     "power": $power
 }
 EOF
-        chmod 666 "$JSON_FILE"
+)
+        # Write JSON safely
+        safe_write_json "$JSON_FILE" "$json_content"
 
-        # Process buffer when full (15 readings = 1 minute)
+        # Process buffer when full
         if [[ -f "$BUFFER_FILE" ]] && [[ $(wc -l < "$BUFFER_FILE") -ge $BUFFER_SIZE ]]; then
-            cat "$BUFFER_FILE" >> "$LOG_FILE"
+            process_buffer
             process_historical_data
             process_24hr_stats
-            > "$BUFFER_FILE"  # Clear buffer
-            log_debug "Processed buffered data"
         fi
     else
         log_error "Failed to get GPU stats output"
@@ -306,6 +369,11 @@ while true; do
     # Run log rotation every hour
     if [ $(date +%M) -eq 0 ]; then
         rotate_logs
+        
+        # Run history rotation at midnight
+        if [ $(date +%H) -eq 0 ]; then
+            rotate_history
+        fi
     fi
     
     sleep $INTERVAL
