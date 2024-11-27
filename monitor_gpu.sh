@@ -295,22 +295,61 @@ PYTHONSCRIPT
 }
 
 # safeguard functions
-function process_buffer() {
-    # Atomic write using temp file
-    local temp_file="${BUFFER_FILE}.tmp"
-    cat "$BUFFER_FILE" > "$temp_file"
-    > "$BUFFER_FILE"  # Clear original buffer
-    cat "$temp_file" >> "$LOG_FILE"
-    rm "$temp_file"
-}
-
 function safe_write_json() {
     local file="$1"
     local content="$2"
     local temp="${file}.tmp"
+    local backup="${file}.bak"
     
+    # Write to temp file
     echo "$content" > "$temp"
-    mv "$temp" "$file"  # Atomic move
+    
+    # Verify temp file was written successfully
+    if [ -s "$temp" ]; then
+        # Create backup of current file if it exists
+        [ -f "$file" ] && cp "$file" "$backup"
+        
+        # Atomic move of temp to real file
+        mv "$temp" "$file"
+        
+        # Clean up backup if everything succeeded
+        [ -f "$backup" ] && rm "$backup"
+        
+        return 0
+    else
+        log_error "Failed to write to temp file: $temp"
+        # Restore from backup if available
+        [ -f "$backup" ] && mv "$backup" "$file"
+        return 1
+    fi
+}
+
+function process_buffer() {
+    local temp_file="${BUFFER_FILE}.tmp"
+    local success=0
+    
+    # Create temp file with buffer contents
+    if cp "$BUFFER_FILE" "$temp_file"; then
+        # Clear original buffer only after successful copy
+        > "$BUFFER_FILE"
+        
+        # Append temp contents to log file
+        if cat "$temp_file" >> "$LOG_FILE"; then
+            success=1
+        else
+            log_error "Failed to append buffer to log file"
+        fi
+    else
+        log_error "Failed to create temp buffer file"
+    fi
+    
+    # Clean up temp file
+    rm -f "$temp_file"
+    
+    # If operation failed, try to restore buffer
+    if [ $success -eq 0 ]; then
+        cat "$temp_file" >> "$BUFFER_FILE"
+    fi
 }
 
 # Update the update_stats function
@@ -364,7 +403,24 @@ cd /app && python3 server.py &
 
 # Main loop
 while true; do
-    update_stats
+    # Track successful updates
+    update_success=0
+    max_retries=3
+    retry_count=0
+
+    while [ $update_success -eq 0 ] && [ $retry_count -lt $max_retries ]; do
+        if update_stats; then
+            update_success=1
+        else
+            retry_count=$((retry_count + 1))
+            log_warning "Update failed, attempt $retry_count of $max_retries"
+            sleep 1
+        fi
+    done
+
+    if [ $update_success -eq 0 ]; then
+        log_error "Multiple update attempts failed, continuing to next cycle"
+    fi
     
     # Run log rotation every hour
     if [ $(date +%M) -eq 0 ]; then
