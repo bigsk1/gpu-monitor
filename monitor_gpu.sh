@@ -1,4 +1,20 @@
 #!/bin/bash
+###############################################################################
+# GPU Monitor - Backend Process
+# 
+# This script monitors NVIDIA GPU metrics and provides real-time data for the
+# dashboard. It handles:
+# - Real-time GPU metrics collection
+# - Historical data management
+# - Log rotation and cleanup
+# - Data persistence through system updates
+# - Error recovery and resilience
+#
+# Dependencies:
+# - nvidia-smi
+# - Python 3.8+
+# - Basic Unix utilities (cut, tr, etc.)
+###############################################################################
 
 BASE_DIR="/app"
 LOG_FILE="$BASE_DIR/gpu_stats.log"
@@ -10,8 +26,8 @@ ERROR_LOG="$LOG_DIR/error.log"
 WARNING_LOG="$LOG_DIR/warning.log"
 DEBUG_LOG="$LOG_DIR/debug.log"
 BUFFER_FILE="/tmp/stats_buffer"
-INTERVAL=4  # update interval seconds
-BUFFER_SIZE=15  # 60 seconds / 4 second interval = 15 readings
+INTERVAL=4  # Time between GPU checks (seconds)
+BUFFER_SIZE=15  # Number of readings before writing to history (15 * 4s = 1 minute)
 
 # Debug toggle (comment out to disable debug logging)
 # DEBUG=true
@@ -19,17 +35,24 @@ BUFFER_SIZE=15  # 60 seconds / 4 second interval = 15 readings
 # Create required directories
 mkdir -p "$LOG_DIR"
 
-# Function to log messages
+###############################################################################
+# Logging Functions
+# These functions handle different levels of logging with timestamps
+###############################################################################
+
+# Log error messages to both console and error log file
 log_error() {
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     echo "[$timestamp] ERROR: $1" | tee -a "$ERROR_LOG"
 }
 
+# Log warning messages to warning log file
 log_warning() {
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     echo "[$timestamp] WARNING: $1" | tee -a "$WARNING_LOG"
 }
 
+# Log debug messages when debug mode is enabled
 log_debug() {
     if [ "${DEBUG:-}" = "true" ]; then
         local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
@@ -48,14 +71,47 @@ cat > "$CONFIG_FILE" << EOF
 }
 EOF
 
-# Function to process historical data
+###############################################################################
+# process_historical_data: Manages historical GPU metrics
+# Handles data persistence and file permissions across system updates
+# Creates and maintains history.json with error recovery
+###############################################################################
 function process_historical_data() {
     local output_file="$HISTORY_DIR/history.json"
     local temp_file="${output_file}.tmp"
 
-    if [ ! -f "$LOG_FILE" ]; then
-        log_warning "No log file found when processing historical data"
-        return
+    # Add diagnostic info
+    log_debug "File permissions before update:"
+    ls -l "$output_file" 2>&1 | log_debug
+    ls -l "$HISTORY_DIR" 2>&1 | log_debug
+
+    # Test write permissions explicitly
+    if ! touch "$temp_file" 2>/dev/null; then
+        log_error "Cannot create temp file in $HISTORY_DIR"
+        log_error "Directory permissions: $(ls -ld $HISTORY_DIR)"
+        return 1
+    fi
+
+    python3 /tmp/format_json.py "$output_file" < "$LOG_FILE" > "$temp_file" 2> >(grep -v "No such file or directory" >> "$ERROR_LOG")
+    
+    if [ -s "$temp_file" ]; then
+        # Compare sizes
+        local new_size=$(wc -c < "$temp_file")
+        local old_size=$(wc -c < "$output_file" 2>/dev/null || echo '0')
+        log_debug "New content size: $new_size"
+        log_debug "Old content size: $old_size"
+        
+        if [ "$new_size" != "$old_size" ]; then
+            mv "$temp_file" "$output_file"
+            # Check if permissions need updating
+            current_perms=$(stat -c "%a" "$output_file")
+            if [ "$current_perms" != "666" ]; then
+                chmod 666 "$output_file"
+                log_debug "Updated file permissions"
+            fi
+        else
+            rm -f "$temp_file"  # Clean up if no changes
+        fi
     fi
 
     # Create the Python script - note the closing PYTHONSCRIPT must be at start of line
@@ -85,6 +141,14 @@ data = {
 existing_data = load_existing_data(sys.argv[1])
 if existing_data:
     data = existing_data
+
+# write test, after loading but before processing
+try:
+    with open(sys.argv[1], 'a') as f:
+        f.write("")  # Test write access
+except Exception as e:
+    print(f"Write test failed restart container to fix: {e}", file=sys.stderr)
+    sys.exit(1)
 
 BATCH_SIZE = 10
 data_buffer = []
@@ -128,18 +192,28 @@ for entry in data_buffer:
 print(json.dumps(data, indent=4))
 PYTHONSCRIPT
 
-    python3 /tmp/format_json.py "$output_file" < "$LOG_FILE" > "$temp_file"
+     # Process data with better error handling
+    if ! python3 /tmp/format_json.py "$output_file" < "$LOG_FILE" > "$temp_file"; then
+        log_error "Python processing failed"
+        rm -f "$temp_file"
+        rm -f "$lock_file"
+        return
+    fi
 
     if [ -s "$temp_file" ]; then
-        mv "$temp_file" "$output_file"
-        #chmod 666 "$output_file"
+        if ! mv "$temp_file" "$output_file"; then
+            log_error "Failed to move temp file to output"
+            rm -f "$temp_file"
+            rm -f "$lock_file"
+            return
+        fi
         log_debug "Updated history file"
     else
-        log_error "Failed to create history file"
+        log_error "Failed to create history file - temp file empty"
         rm -f "$temp_file"
     fi
 
-    rm -f /tmp/format_json.py
+    rm -f "$lock_file"
 }
 
 # Function to process 24-hour stats
@@ -214,25 +288,30 @@ EOF
     rm /tmp/process_stats.py
 }
 
-# Function to rotate logs
+###############################################################################
+# rotate_logs: Manages log file sizes and retention
+# Rotates logs based on:
+# - Size limit (10MB)
+# - Age limit (2 days)
+# Handles: error.log, warning.log, gpu_stats.log
+###############################################################################
 rotate_logs() {
-    local max_size=$((10 * 1024 * 1024))  # 10MB
-    local max_age=$((2 * 24 * 3600))      # 2 days in seconds
+    local max_size=$((10 * 1024 * 1024))  # 10MB size limit
+    local max_age=$((2 * 24 * 3600))      # 2 day retention
     local current_time=$(date +%s)
 
-    # Function to check and rotate a specific log file
     rotate_log_file() {
         local log_file=$1
         local timestamp=$(date '+%Y%m%d-%H%M%S')
-
-        # Check file size
+        
+        # Size-based rotation
         if [[ -f "$log_file" && $(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file") -gt $max_size ]]; then
             mv "$log_file" "${log_file}.${timestamp}"
             touch "$log_file"
             log_debug "Rotated $log_file due to size"
         fi
 
-        # Remove old rotated logs
+        # Age-based cleanup
         find "$(dirname "$log_file")" -name "$(basename "$log_file").*" -type f | while read rotated_log; do
             local file_time=$(stat -f%m "$rotated_log" 2>/dev/null || stat -c%Y "$rotated_log")
             if (( current_time - file_time > max_age )); then
@@ -248,7 +327,11 @@ rotate_logs() {
     rotate_log_file "$LOG_FILE"
 }
 
-# rotate_logs function
+###############################################################################
+# rotate_history: Maintains 7-day rolling window of historical data
+# Runs at midnight to remove data older than 7 days
+# No arguments or return values
+###############################################################################
 function rotate_history() {
     local history_file="$HISTORY_DIR/history.json"
     local max_days=7  # Keep one week of history
@@ -294,7 +377,14 @@ PYTHONSCRIPT
     fi
 }
 
-# safeguard functions
+###############################################################################
+# safe_write_json: Safely writes JSON data to prevent corruption
+# Arguments:
+#   $1 - Target file path
+#   $2 - JSON content to write
+# Returns:
+#   0 on success, 1 on failure
+###############################################################################
 function safe_write_json() {
     local file="$1"
     local content="$2"
@@ -324,6 +414,11 @@ function safe_write_json() {
     fi
 }
 
+###############################################################################
+# process_buffer: Safely handles buffered GPU metrics data
+# Implements atomic write operations to prevent data loss during system updates
+# Returns: 0 on success, 1 on failure
+###############################################################################
 function process_buffer() {
     local temp_file="${BUFFER_FILE}.tmp"
     local success=0
@@ -352,15 +447,43 @@ function process_buffer() {
     fi
 }
 
-# Update the update_stats function
+###############################################################################
+# update_stats: Core function for GPU metrics collection and processing
+# Collects GPU metrics every INTERVAL seconds and manages data flow
+# Handles:
+# - GPU metric collection via nvidia-smi
+# - Buffer management
+# - JSON updates for real-time display
+# - Error recovery for system updates and GPU access issues
+# Returns: 0 on success, 1 on failure
+###############################################################################
 update_stats() {
+    local write_failed=0
+    
+    # Collect current GPU metrics
     local timestamp=$(date '+%m-%d %H:%M:%S')
     local gpu_stats=$(nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,memory.used,power.draw \
                      --format=csv,noheader,nounits 2>/dev/null)
     
     if [[ -n "$gpu_stats" ]]; then
-        # Append to buffer
-        echo "$timestamp,$gpu_stats" >> "$BUFFER_FILE"
+        # Verify write access before proceeding
+        if ! touch "$BUFFER_FILE" 2>/dev/null; then
+            log_error "Cannot write to buffer file"
+            return 1
+        fi
+
+        # Buffer write with error handling
+        if ! echo "$timestamp,$gpu_stats" >> "$BUFFER_FILE"; then
+            log_error "Failed to write to buffer"
+            write_failed=1
+        fi
+
+        # Detailed error logging for debugging
+        if [[ $write_failed -eq 1 ]]; then
+            log_error "Buffer write details:"
+            ls -l "$BUFFER_FILE" 2>&1 | log_error
+            df -h "$(dirname "$BUFFER_FILE")" 2>&1 | log_error
+        fi
 
         # Update current stats JSON for real-time display
         local temp=$(echo "$gpu_stats" | cut -d',' -f1 | tr -d ' ')
@@ -372,7 +495,7 @@ update_stats() {
         if [[ "$power" == "N/A" || -z "$power" || "$power" == "[N/A]" ]]; then
             power="0"
         fi
-
+        
         # Create JSON content
         local json_content=$(cat << EOF
 {
@@ -401,13 +524,21 @@ EOF
 # Start web server in background using the new Python server
 cd /app && python3 server.py &
 
-# Main loop
+###############################################################################
+# Main Process Loop
+# Manages the continuous monitoring process with:
+# - Retry mechanism for failed updates
+# - Hourly log rotation
+# - Nightly history cleanup (7-day retention)
+# - Error resilience during system updates
+###############################################################################
 while true; do
-    # Track successful updates
+    # Update tracking with retry mechanism
     update_success=0
     max_retries=3
     retry_count=0
 
+    # Retry loop for failed updates
     while [ $update_success -eq 0 ] && [ $retry_count -lt $max_retries ]; do
         if update_stats; then
             update_success=1
@@ -418,15 +549,15 @@ while true; do
         fi
     done
 
+    # Handle complete update failure
     if [ $update_success -eq 0 ]; then
         log_error "Multiple update attempts failed, continuing to next cycle"
     fi
     
-    # Run log rotation every hour
+    # Hourly log rotation and nightly history cleanup
     if [ $(date +%M) -eq 0 ]; then
         rotate_logs
         
-        # Run history rotation at midnight
         if [ $(date +%H) -eq 0 ]; then
             rotate_history
         fi

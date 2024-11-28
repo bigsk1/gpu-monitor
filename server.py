@@ -1,10 +1,13 @@
+import logging
 from aiohttp import web
 import os
-import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger('gpu-monitor')
 
 async def handle_static(request):
     file_path = request.path.strip('/')
@@ -18,7 +21,11 @@ app = web.Application()
 app.router.add_get('/{tail:.*}', handle_static)
 
 if __name__ == '__main__':
-    logger.info("Starting GPU Monitor Server")
-    logger.info("Serving on port: 8081")
-    logger.info("Dashboard available at: http://localhost:8081")
+    logger.info("========================================")
+    logger.info("Starting NVIDIA GPU Monitor")
+    logger.info("https://github.com/bigsk1/gpu-monitor")
+    logger.info("----------------------------------------")
+    logger.info("Server running on: http://localhost:8081")
+    logger.info("========================================")
+    
     web.run_app(app, port=8081, access_log=None)
