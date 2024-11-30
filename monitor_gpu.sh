@@ -122,33 +122,49 @@ from datetime import datetime, timedelta
 import os
 
 def load_existing_data(file_path):
-    with open(file_path, 'r') as f:
-        data = json.load(f)
-        
-    # Trim old data while loading
-    current_time = datetime.now()
-    cutoff = current_time - timedelta(hours=24, minutes=10)
-    current_year = current_time.year
-    
-    # Find index where to start keeping data
-    valid_indices = []
-    for i, timestamp in enumerate(data['timestamps']):
-        dt = datetime.strptime(f"{current_year} {timestamp}", "%Y %m-%d %H:%M:%S")
-        if dt >= cutoff:
-            valid_indices.append(i)
-            
-    # Keep only data within our window
-    return {
-        'timestamps': [data['timestamps'][i] for i in valid_indices],
-        'temperatures': [data['temperatures'][i] for i in valid_indices],
-        'utilizations': [data['utilizations'][i] for i in valid_indices],
-        'memory': [data['memory'][i] for i in valid_indices],
-        'power': [data['power'][i] for i in valid_indices]
+    # Initialize default empty data structure
+    default_data = {
+        "timestamps": [],
+        "temperatures": [],
+        "utilizations": [],
+        "memory": [],
+        "power": []
     }
+    
+    # If file doesn't exist or is empty, return default data
+    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+        return default_data
+        
+    try:
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+            
+        # Trim old data while loading
+        current_time = datetime.now()
+        cutoff = current_time - timedelta(hours=24, minutes=10)
+        current_year = current_time.year
+        
+        # Find index where to start keeping data
+        valid_indices = []
+        for i, timestamp in enumerate(data['timestamps']):
+            dt = datetime.strptime(f"{current_year} {timestamp}", "%Y %m-%d %H:%M:%S")
+            if dt >= cutoff:
+                valid_indices.append(i)
+                
+        # Keep only data within our window
+        return {
+            'timestamps': [data['timestamps'][i] for i in valid_indices],
+            'temperatures': [data['temperatures'][i] for i in valid_indices],
+            'utilizations': [data['utilizations'][i] for i in valid_indices],
+            'memory': [data['memory'][i] for i in valid_indices],
+            'power': [data['power'][i] for i in valid_indices]
+        }
+    except (json.JSONDecodeError, KeyError, FileNotFoundError) as e:
+        # If any error occurs during loading/parsing, return default data
+        return default_data
 
-existing_data = load_existing_data(sys.argv[1])
-if existing_data:
-    data = existing_data
+# Initialize data structure
+data = load_existing_data(sys.argv[1])
 
 # write test, after loading but before processing
 try:
