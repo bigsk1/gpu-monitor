@@ -12,8 +12,8 @@
 #
 # Dependencies:
 # - nvidia-smi
-# - Python 3.8+
-# - Basic Unix utilities (cut, tr, etc.)
+# - Python 3.12+
+# - Basic Unix utilities
 ###############################################################################
 
 BASE_DIR="/app"
@@ -118,25 +118,33 @@ function process_historical_data() {
 cat > /tmp/format_json.py << 'PYTHONSCRIPT'
 import sys
 import json
-from datetime import datetime
+from datetime import datetime, timedelta 
 import os
 
 def load_existing_data(file_path):
-    if os.path.exists(file_path):
-        try:
-            with open(file_path, 'r') as f:
-                return json.load(f)
-        except:
-            return None
-    return None
-
-data = {
-    "timestamps": [],
-    "temperatures": [],
-    "utilizations": [],
-    "memory": [],
-    "power": []
-}
+    with open(file_path, 'r') as f:
+        data = json.load(f)
+        
+    # Trim old data while loading
+    current_time = datetime.now()
+    cutoff = current_time - timedelta(hours=24, minutes=10)
+    current_year = current_time.year
+    
+    # Find index where to start keeping data
+    valid_indices = []
+    for i, timestamp in enumerate(data['timestamps']):
+        dt = datetime.strptime(f"{current_year} {timestamp}", "%Y %m-%d %H:%M:%S")
+        if dt >= cutoff:
+            valid_indices.append(i)
+            
+    # Keep only data within our window
+    return {
+        'timestamps': [data['timestamps'][i] for i in valid_indices],
+        'temperatures': [data['temperatures'][i] for i in valid_indices],
+        'utilizations': [data['utilizations'][i] for i in valid_indices],
+        'memory': [data['memory'][i] for i in valid_indices],
+        'power': [data['power'][i] for i in valid_indices]
+    }
 
 existing_data = load_existing_data(sys.argv[1])
 if existing_data:
@@ -328,56 +336,6 @@ rotate_logs() {
 }
 
 ###############################################################################
-# rotate_history: Maintains 7-day rolling window of historical data
-# Runs at midnight to remove data older than 7 days
-# No arguments or return values
-###############################################################################
-function rotate_history() {
-    local history_file="$HISTORY_DIR/history.json"
-    local max_days=7  # Keep one week of history
-    
-    if [ -f "$history_file" ]; then
-        # Create a Python script to trim old data
-        cat > /tmp/trim_history.py << 'PYTHONSCRIPT'
-import json
-import sys
-from datetime import datetime, timedelta
-
-# Read existing history
-with open(sys.argv[1], 'r') as f:
-    data = json.load(f)
-
-# Calculate cutoff date
-cutoff = datetime.now() - timedelta(days=int(sys.argv[2]))
-current_year = datetime.now().year
-
-# Filter data
-filtered_indices = []
-for i, timestamp in enumerate(data['timestamps']):
-    dt = datetime.strptime(f"{current_year} {timestamp}", "%Y %m-%d %H:%M:%S")
-    if dt >= cutoff:
-        filtered_indices.append(i)
-
-# Create new filtered data
-filtered_data = {
-    'timestamps': [data['timestamps'][i] for i in filtered_indices],
-    'temperatures': [data['temperatures'][i] for i in filtered_indices],
-    'utilizations': [data['utilizations'][i] for i in filtered_indices],
-    'memory': [data['memory'][i] for i in filtered_indices],
-    'power': [data['power'][i] for i in filtered_indices]
-}
-
-# Write filtered data back
-with open(sys.argv[1], 'w') as f:
-    json.dump(filtered_data, f, indent=4)
-PYTHONSCRIPT
-
-        python3 /tmp/trim_history.py "$history_file" "$max_days"
-        rm /tmp/trim_history.py
-    fi
-}
-
-###############################################################################
 # safe_write_json: Safely writes JSON data to prevent corruption
 # Arguments:
 #   $1 - Target file path
@@ -521,7 +479,7 @@ EOF
     fi
 }
 
-# Start web server in background using the new Python server
+# Start web server in background using Python server
 cd /app && python3 server.py &
 
 ###############################################################################
@@ -529,7 +487,6 @@ cd /app && python3 server.py &
 # Manages the continuous monitoring process with:
 # - Retry mechanism for failed updates
 # - Hourly log rotation
-# - Nightly history cleanup (7-day retention)
 # - Error resilience during system updates
 ###############################################################################
 while true; do
@@ -557,10 +514,6 @@ while true; do
     # Hourly log rotation and nightly history cleanup
     if [ $(date +%M) -eq 0 ]; then
         rotate_logs
-        
-        if [ $(date +%H) -eq 0 ]; then
-            rotate_history
-        fi
     fi
     
     sleep $INTERVAL
