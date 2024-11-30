@@ -89,28 +89,10 @@ function process_historical_data() {
     if ! touch "$temp_file" 2>/dev/null; then
         log_error "Cannot create temp file in $HISTORY_DIR"
         log_error "Directory permissions: $(ls -ld $HISTORY_DIR)"
-        return 1
-    fi
-
-    python3 /tmp/format_json.py "$output_file" < "$LOG_FILE" > "$temp_file" 2> >(grep -v "No such file or directory" >> "$ERROR_LOG")
-    
-    if [ -s "$temp_file" ]; then
-        # Compare sizes
-        local new_size=$(wc -c < "$temp_file")
-        local old_size=$(wc -c < "$output_file" 2>/dev/null || echo '0')
-        log_debug "New content size: $new_size"
-        log_debug "Old content size: $old_size"
-        
-        if [ "$new_size" != "$old_size" ]; then
-            mv "$temp_file" "$output_file"
-            # Check if permissions need updating
-            current_perms=$(stat -c "%a" "$output_file")
-            if [ "$current_perms" != "666" ]; then
-                chmod 666 "$output_file"
-                log_debug "Updated file permissions"
-            fi
-        else
-            rm -f "$temp_file"  # Clean up if no changes
+        # Attempt to fix permissions on directory
+        chmod 777 "$HISTORY_DIR" 2>/dev/null
+        if ! touch "$temp_file" 2>/dev/null; then
+            return 1
         fi
     fi
 
@@ -216,28 +198,42 @@ for entry in data_buffer:
 print(json.dumps(data, indent=4))
 PYTHONSCRIPT
 
-     # Process data with better error handling
+    # Process data with better error handling
     if ! python3 /tmp/format_json.py "$output_file" < "$LOG_FILE" > "$temp_file"; then
         log_error "Python processing failed"
         rm -f "$temp_file"
-        rm -f "$lock_file"
-        return
+        return 1
     fi
-
+    
     if [ -s "$temp_file" ]; then
+        # Move temp file regardless of size (we trust our Python script's output)
         if ! mv "$temp_file" "$output_file"; then
             log_error "Failed to move temp file to output"
+            log_error "Move operation details: $(ls -l "$temp_file" "$output_file" 2>&1)"
             rm -f "$temp_file"
-            rm -f "$lock_file"
-            return
+            return 1
         fi
-        log_debug "Updated history file"
+        
+        # Always ensure proper permissions after any file operation
+        chmod 666 "$output_file" 2>/dev/null
+        current_perms=$(stat -c "%a" "$output_file" 2>/dev/null)
+        if [ "$current_perms" != "666" ]; then
+            log_warning "Failed to set permissions 666 on $output_file (current: $current_perms)"
+            # Try alternative permission fix
+            chmod a+rw "$output_file" 2>/dev/null
+        fi
+        log_debug "Updated history file with new permissions: $(ls -l "$output_file")"
     else
         log_error "Failed to create history file - temp file empty"
         rm -f "$temp_file"
+        return 1
     fi
 
-    rm -f "$lock_file"
+    # Final permission verification
+    current_perms=$(stat -c "%a" "$output_file" 2>/dev/null)
+    log_debug "Final file permissions: $current_perms"
+    
+    return 0
 }
 
 # Function to process 24-hour stats
