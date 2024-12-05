@@ -311,13 +311,13 @@ EOF
 ###############################################################################
 # rotate_logs: Manages log file sizes and retention
 # Rotates logs based on:
-# - Size limit (10MB)
-# - Age limit (2 days)
+# - Size limit (5MB)
+# - Age limit (25 hr)
 # Handles: error.log, warning.log, gpu_stats.log
 ###############################################################################
 rotate_logs() {
-    local max_size=$((10 * 1024 * 1024))  # 10MB size limit
-    local max_age=$((2 * 24 * 3600))      # 2 day retention
+    local max_size=$((5 * 1024 * 1024))  # 5MB size limit
+    local max_age=$((25 * 3600))      # 25hr retention
     local current_time=$(date +%s)
 
     rotate_log_file() {
