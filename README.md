@@ -374,3 +374,13 @@ If this failed proceed to [Installation Prerequisites](#installation-prerequisit
 Docker Scout Score
 
 ![Docker Scout](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/969b5bc9-6c2c-44c7-32a8-359287378a00/public)
+
+## Star History
+
+<a href="https://star-history.com/#bigsk1/gpu-monitor&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=bigsk1/gpu-monitor&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=bigsk1/gpu-monitor&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=bigsk1/gpu-monitor&type=Date" />
+ </picture>
+</a>
