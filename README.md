@@ -309,6 +309,8 @@ services:
       - ./logs:/app/logs    # Remove Persist logs
 ```
 
+The application uses SQLite database (gpu_metrics.db) for efficient storage of historical metrics. Both the database file and the history.json file (which is generated from the database) are persisted through these volume mounts. This ensures data continuity across container restarts or rebuilds.
+
 ## Alerts
 
 You can enable or disable alerts in ui, you can set thresholds for gpu temp, gpu utilization % and watts. Setting are saved in your browser if you make changes you only need to do it once, however you can always modify the code and rebuild the container to make it permanent.
