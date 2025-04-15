@@ -28,7 +28,7 @@ WARNING_LOG="$LOG_DIR/warning.log"
 DEBUG_LOG="$LOG_DIR/debug.log"
 BUFFER_FILE="/tmp/stats_buffer"
 # SQLite database location
-DB_FILE="$BASE_DIR/gpu_metrics.db"
+DB_FILE="$HISTORY_DIR/gpu_metrics.db"
 INTERVAL=4  # Time between GPU checks (seconds)
 BUFFER_SIZE=15  # Number of readings before writing to history (15 * 4s = 1 minute)
 

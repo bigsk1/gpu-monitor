@@ -305,11 +305,13 @@ services:
   gpu-monitor:
     # ... other settings ...
     volumes:
-      - ./history:/app/history    # Remove Persist historical data
-      - ./logs:/app/logs    # Remove Persist logs
+      - ./history:/app/history    # Persists historical data and SQLite database
+      - ./logs:/app/logs    # Persists logs
 ```
 
-The application uses SQLite database (gpu_metrics.db) for efficient storage of historical metrics. Both the database file and the history.json file (which is generated from the database) are persisted through these volume mounts. This ensures data continuity across container restarts or rebuilds.
+The application uses SQLite database (gpu_metrics.db) stored in the history directory for efficient storage of historical metrics. Both the database file and the history.json file (which is generated from the database) are persisted through the volume mounts. This ensures data continuity across container restarts or rebuilds.
+
+**Important**: When upgrading from an older version that used JSON storage to this SQLite version, any previous history will not be migrated automatically. New metrics will begin collecting in the SQLite database after upgrading.
 
 ## Alerts
 
