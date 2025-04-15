@@ -152,9 +152,10 @@ def export_history_json(db_path, output_path):
         conn.row_factory = sqlite3.Row
         
         # Get current time for filtering
-        cutoff_time = int((datetime.now() - timedelta(hours=24, minutes=10)).timestamp())
+        # Keep 3 days of history
+        cutoff_time = int((datetime.now() - timedelta(days=3, minutes=10)).timestamp())
         
-        # Query the database for the last 24 hours + 10 minutes of data
+        # Query the database for the last 3 days + 10 minutes of data
         cur = conn.cursor()
         cur.execute('''
             SELECT timestamp, temperature, utilization, memory, power
@@ -349,8 +350,8 @@ rotate_logs() {
 function clean_old_data() {
     log_debug "Cleaning old data from SQLite database"
     
-    # Remove data older than 24 hours + 10 minutes (same retention policy as before)
-    local cutoff_time=$(( $(date +%s) - 86400 - 600 ))
+    # Remove data older than 3 days + 10 minutes (extended retention policy)
+    local cutoff_time=$(( $(date +%s) - 259200 - 600 ))  # 3 days (259200 seconds) + 10 minutes
     
     sqlite3 "$DB_FILE" <<EOF
     DELETE FROM gpu_metrics WHERE timestamp_epoch < $cutoff_time;

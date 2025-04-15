@@ -99,7 +99,7 @@ https://github.com/user-attachments/assets/cd6cbe1f-33f0-47d5-8b30-29e4d08e90b4
 
 - Real-time GPU metrics monitoring of a single GPU.
 - Interactive web dashboard
-- Historical data tracking (15m, 30m, 1h, 6h, 12h, 24h)
+- Historical data tracking (15m, 30m, 1h, 6h, 12h, 24h, 3d)
 - Temperature, utilization, memory, and power monitoring
 - Docker-based for easy deployment
 - Persist history between new containers
@@ -384,10 +384,6 @@ If this failed proceed to [Installation Prerequisites](#installation-prerequisit
 
 ## License
 [![License](https://img.shields.io/github/license/bigsk1/gpu-monitor)](https://github.com/bigsk1/gpu-monitor/blob/main/LICENSE)
-
-Docker Scout Score
-
-![Docker Scout](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/969b5bc9-6c2c-44c7-32a8-359287378a00/public)
 
 ## Star History
 
