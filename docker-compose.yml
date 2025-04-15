@@ -10,8 +10,8 @@ services:
       - TZ=America/Los_Angeles   # update your timezone
     volumes:
       - /etc/localtime:/etc/localtime:ro  # Share host timezone
-      - ./history:/app/history    # Persist historical data on host
-      - ./logs:/app/logs    # Persist logs
+      - ./history:/app/history:rw    # Persist historical data and SQLite database with explicit rw permissions
+      - ./logs:/app/logs:rw    # Persist logs with explicit rw permissions
     deploy:
       resources:
         reservations:

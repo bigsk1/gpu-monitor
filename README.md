@@ -134,8 +134,8 @@ docker run -d \
   -p 8081:8081 \
   -e TZ=America/Los_Angeles \
   -v /etc/localtime:/etc/localtime:ro \
-  -v ./history:/app/history \
-  -v ./logs:/app/logs \
+  -v ./history:/app/history:rw \
+  -v ./logs:/app/logs:rw \
   --gpus all \
   --restart unless-stopped \
   bigsk1/gpu-monitor:latest
@@ -226,8 +226,8 @@ docker run -d \
   -p 8081:8081 \
   -e TZ=America/Los_Angeles \
   -v /etc/localtime:/etc/localtime:ro \
-  -v ./history:/app/history \
-  -v ./logs:/app/logs \
+  -v ./history:/app/history:rw \
+  -v ./logs:/app/logs:rw \
   --gpus all \
   --restart unless-stopped \
   gpu-monitor
@@ -305,9 +305,11 @@ services:
   gpu-monitor:
     # ... other settings ...
     volumes:
-      - ./history:/app/history    # Persists historical data and SQLite database
-      - ./logs:/app/logs    # Persists logs
+      - ./history:/app/history:rw    # Persists historical data and SQLite database
+      - ./logs:/app/logs:rw    # Persists logs
 ```
+
+The `:rw` flag explicitly sets read/write permissions, which is important when running containers on different hosts or network environments.
 
 The application uses SQLite database (gpu_metrics.db) stored in the history directory for efficient storage of historical metrics. Both the database file and the history.json file (which is generated from the database) are persisted through the volume mounts. This ensures data continuity across container restarts or rebuilds.
 
