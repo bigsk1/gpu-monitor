@@ -11,7 +11,7 @@ logs/*
 .docker/
 
 # Editor files
-.vscode/
+
 .idea/
 *.swp
 

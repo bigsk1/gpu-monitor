@@ -313,6 +313,12 @@ The `:rw` flag explicitly sets read/write permissions, which is important when r
 
 The application uses SQLite database (gpu_metrics.db) stored in the history directory for efficient storage of historical metrics. Both the database file and the history.json file (which is generated from the database) are persisted through the volume mounts. This ensures data continuity across container restarts or rebuilds.
 
+### Viewing the Database
+
+For developers who want to inspect the SQLite database, we recommend using the "SQLite Viewer" extension:
+- VSCode/Cursor: [SQLite Viewer Extension](https://marketplace.visualstudio.com/items?itemName=qwtel.sqlite-viewer)
+- This allows you to easily browse and query the database contents right in your editor
+
 **Important**: When upgrading from an older version that used JSON storage to this SQLite version, any previous history will not be migrated automatically. New metrics will begin collecting in the SQLite database after upgrading.
 
 ## Alerts
