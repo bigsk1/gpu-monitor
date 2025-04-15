@@ -97,7 +97,7 @@ https://github.com/user-attachments/assets/cd6cbe1f-33f0-47d5-8b30-29e4d08e90b4
 
 ## Features
 
-- Real-time GPU metrics monitoring
+- Real-time GPU metrics monitoring of a single GPU.
 - Interactive web dashboard
 - Historical data tracking (15m, 30m, 1h, 6h, 12h, 24h)
 - Temperature, utilization, memory, and power monitoring
