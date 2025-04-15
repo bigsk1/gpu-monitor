@@ -106,12 +106,14 @@ https://github.com/user-attachments/assets/cd6cbe1f-33f0-47d5-8b30-29e4d08e90b4
 - Real time alerts - sound and notification
 - Responsive theme for any size screen
 - Toggle gauges on or off to show metrics in graph
+- SQLite database for efficient history storage and reduced CPU usage
 
 ## Prerequisites
 
 - Docker
 - NVIDIA GPU
 - NVIDIA Container Toolkit
+- SQLite3 (included in the container)
 
 ## Quick Start
 

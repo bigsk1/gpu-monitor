@@ -52,6 +52,14 @@ check_prerequisites() {
         return 1
     fi
     print_status "NVIDIA GPU: Found"
+    
+    # Check for SQLite3 (only for local development, container has it installed)
+    if ! command -v sqlite3 &> /dev/null; then
+        print_warning "SQLite3 not found on the local system."
+        print_warning "This is only needed for local development, the container includes SQLite3."
+    else
+        print_status "SQLite3: Found"
+    fi
 
     return 0
 }

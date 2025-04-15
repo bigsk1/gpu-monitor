@@ -13,6 +13,7 @@
 # Dependencies:
 # - nvidia-smi
 # - Python 3.12+
+# - SQLite3
 # - Basic Unix utilities
 ###############################################################################
 
@@ -26,6 +27,8 @@ ERROR_LOG="$LOG_DIR/error.log"
 WARNING_LOG="$LOG_DIR/warning.log"
 DEBUG_LOG="$LOG_DIR/debug.log"
 BUFFER_FILE="/tmp/stats_buffer"
+# SQLite database location
+DB_FILE="$BASE_DIR/gpu_metrics.db"
 INTERVAL=4  # Time between GPU checks (seconds)
 BUFFER_SIZE=15  # Number of readings before writing to history (15 * 4s = 1 minute)
 
@@ -34,6 +37,7 @@ BUFFER_SIZE=15  # Number of readings before writing to history (15 * 4s = 1 minu
 
 # Create required directories
 mkdir -p "$LOG_DIR"
+mkdir -p "$HISTORY_DIR"
 
 ###############################################################################
 # Logging Functions
@@ -72,238 +76,229 @@ cat > "$CONFIG_FILE" << EOF
 EOF
 
 ###############################################################################
+# initialize_database: Creates and initializes the SQLite database
+# Handles schema creation and indexes for efficient queries
+###############################################################################
+function initialize_database() {
+    log_debug "Initializing SQLite database at $DB_FILE"
+    
+    if [ ! -f "$DB_FILE" ]; then
+        log_debug "Creating new database file"
+        touch "$DB_FILE"
+        chmod 666 "$DB_FILE"  # Ensure proper permissions
+    fi
+    
+    # Create SQLite tables and indexes
+    sqlite3 "$DB_FILE" << EOF
+    CREATE TABLE IF NOT EXISTS gpu_metrics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        timestamp_epoch INTEGER NOT NULL,
+        temperature REAL NOT NULL,
+        utilization REAL NOT NULL,
+        memory REAL NOT NULL,
+        power REAL NOT NULL
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_gpu_metrics_timestamp_epoch ON gpu_metrics(timestamp_epoch);
+    
+    -- Create a view for the legacy JSON format to maintain compatibility
+    CREATE VIEW IF NOT EXISTS history_json_view AS
+    SELECT 
+        json_object(
+            'timestamps', json_group_array(timestamp),
+            'temperatures', json_group_array(temperature),
+            'utilizations', json_group_array(utilization),
+            'memory', json_group_array(memory),
+            'power', json_group_array(power)
+        ) AS json_data
+    FROM (
+        SELECT timestamp, temperature, utilization, memory, power
+        FROM gpu_metrics
+        WHERE timestamp_epoch > (strftime('%s', 'now') - 86400)
+        ORDER BY timestamp_epoch ASC
+    );
+EOF
+    
+    if [ $? -ne 0 ]; then
+        log_error "Failed to initialize SQLite database"
+        return 1
+    fi
+    
+    log_debug "Database initialized successfully"
+    return 0
+}
+
+###############################################################################
 # process_historical_data: Manages historical GPU metrics
 # Handles data persistence and file permissions across system updates
-# Creates and maintains history.json with error recovery
+# Creates JSON view for backward compatibility
 ###############################################################################
 function process_historical_data() {
     local output_file="$HISTORY_DIR/history.json"
-    local temp_file="${output_file}.tmp"
-
-    # Add diagnostic info
-    log_debug "File permissions before update:"
-    ls -l "$output_file" 2>&1 | log_debug
-    ls -l "$HISTORY_DIR" 2>&1 | log_debug
-
-    # Test write permissions explicitly
-    if ! touch "$temp_file" 2>/dev/null; then
-        log_error "Cannot create temp file in $HISTORY_DIR"
-        log_error "Directory permissions: $(ls -ld $HISTORY_DIR)"
-        # Attempt to fix permissions on directory
-        chmod 777 "$HISTORY_DIR" 2>/dev/null
-        if ! touch "$temp_file" 2>/dev/null; then
-            return 1
-        fi
-    fi
-
-    # Create the Python script - note the closing PYTHONSCRIPT must be at start of line
-cat > /tmp/format_json.py << 'PYTHONSCRIPT'
-import sys
-import json
-from datetime import datetime, timedelta 
-import os
-
-def load_existing_data(file_path):
-    # Initialize default empty data structure
-    default_data = {
-        "timestamps": [],
-        "temperatures": [],
-        "utilizations": [],
-        "memory": [],
-        "power": []
-    }
     
-    # If file doesn't exist or is empty, return default data
-    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
-        return default_data
-        
+    # Create Python script for generating the JSON file from SQLite
+    cat > /tmp/export_json.py << 'PYTHONSCRIPT'
+import json
+import sqlite3
+import sys
+import os
+from datetime import datetime, timedelta
+
+def export_history_json(db_path, output_path):
     try:
-        with open(file_path, 'r') as f:
-            data = json.load(f)
-            
-        # Trim old data while loading
-        current_time = datetime.now()
-        cutoff = current_time - timedelta(hours=24, minutes=10)
-        current_year = current_time.year
+        # Connect to SQLite database
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
         
-        # Find index where to start keeping data
-        valid_indices = []
-        for i, timestamp in enumerate(data['timestamps']):
-            dt = datetime.strptime(f"{current_year} {timestamp}", "%Y %m-%d %H:%M:%S")
-            if dt >= cutoff:
-                valid_indices.append(i)
-                
-        # Keep only data within our window
-        return {
-            'timestamps': [data['timestamps'][i] for i in valid_indices],
-            'temperatures': [data['temperatures'][i] for i in valid_indices],
-            'utilizations': [data['utilizations'][i] for i in valid_indices],
-            'memory': [data['memory'][i] for i in valid_indices],
-            'power': [data['power'][i] for i in valid_indices]
+        # Get current time for filtering
+        cutoff_time = int((datetime.now() - timedelta(hours=24, minutes=10)).timestamp())
+        
+        # Query the database for the last 24 hours + 10 minutes of data
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT timestamp, temperature, utilization, memory, power
+            FROM gpu_metrics
+            WHERE timestamp_epoch > ?
+            ORDER BY timestamp_epoch ASC
+        ''', (cutoff_time,))
+        
+        # Prepare data structure
+        result = {
+            "timestamps": [],
+            "temperatures": [],
+            "utilizations": [],
+            "memory": [],
+            "power": []
         }
-    except (json.JSONDecodeError, KeyError, FileNotFoundError) as e:
-        # If any error occurs during loading/parsing, return default data
-        return default_data
-
-# Initialize data structure
-data = load_existing_data(sys.argv[1])
-
-# write test, after loading but before processing
-try:
-    with open(sys.argv[1], 'a') as f:
-        f.write("")  # Test write access
-except Exception as e:
-    print(f"Write test failed restart container to fix: {e}", file=sys.stderr)
-    sys.exit(1)
-
-BATCH_SIZE = 10
-data_buffer = []
-
-for line in sys.stdin:
-    try:
-        timestamp, temp, util, mem, power = line.strip().split(',')
-        try:
-            power_val = float(power) if power.strip() != 'N/A' else 0
-        except (ValueError, AttributeError):
-            power_val = 0
-
-        data_buffer.append({
-            "timestamp": timestamp,
-            "temperature": float(temp),
-            "utilization": float(util),
-            "memory": float(mem),
-            "power": power_val
-        })
         
-        if len(data_buffer) >= BATCH_SIZE:
-            for entry in data_buffer:
-                if entry["timestamp"] not in data["timestamps"]:
-                    data["timestamps"].append(entry["timestamp"])
-                    data["temperatures"].append(entry["temperature"])
-                    data["utilizations"].append(entry["utilization"])
-                    data["memory"].append(entry["memory"])
-                    data["power"].append(entry["power"])
-            data_buffer = []
+        # Process each row
+        for row in cur.fetchall():
+            result["timestamps"].append(row["timestamp"])
+            result["temperatures"].append(row["temperature"])
+            result["utilizations"].append(row["utilization"])
+            result["memory"].append(row["memory"])
+            result["power"].append(row["power"])
+        
+        # Create temp file first
+        temp_path = output_path + ".tmp"
+        with open(temp_path, 'w') as f:
+            json.dump(result, f, indent=4)
+        
+        # Move temp file to final destination
+        os.rename(temp_path, output_path)
+        
+        return True
     except Exception as e:
-        continue
+        print(f"Error exporting history to JSON: {e}", file=sys.stderr)
+        return False
+    finally:
+        if 'conn' in locals():
+            conn.close()
 
-for entry in data_buffer:
-    if entry["timestamp"] not in data["timestamps"]:
-        data["timestamps"].append(entry["timestamp"])
-        data["temperatures"].append(entry["temperature"])
-        data["utilizations"].append(entry["utilization"])
-        data["memory"].append(entry["memory"])
-        data["power"].append(entry["power"])
-
-print(json.dumps(data, indent=4))
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print(f"Usage: {sys.argv[0]} <db_path> <output_json_path>", file=sys.stderr)
+        sys.exit(1)
+        
+    success = export_history_json(sys.argv[1], sys.argv[2])
+    sys.exit(0 if success else 1)
 PYTHONSCRIPT
 
-    # Process data with better error handling
-    if ! python3 /tmp/format_json.py "$output_file" < "$LOG_FILE" > "$temp_file"; then
-        log_error "Python processing failed"
-        rm -f "$temp_file"
+    # Run the Python script to export data
+    if ! python3 /tmp/export_json.py "$DB_FILE" "$output_file"; then
+        log_error "Failed to export history data to JSON"
         return 1
     fi
     
-    if [ -s "$temp_file" ]; then
-        # Move temp file regardless of size (we trust our Python script's output)
-        if ! mv "$temp_file" "$output_file"; then
-            log_error "Failed to move temp file to output"
-            log_error "Move operation details: $(ls -l "$temp_file" "$output_file" 2>&1)"
-            rm -f "$temp_file"
-            return 1
-        fi
-        
-        # Always ensure proper permissions after any file operation
-        chmod 666 "$output_file" 2>/dev/null
-        current_perms=$(stat -c "%a" "$output_file" 2>/dev/null)
-        if [ "$current_perms" != "666" ]; then
-            log_warning "Failed to set permissions 666 on $output_file (current: $current_perms)"
-            # Try alternative permission fix
-            chmod a+rw "$output_file" 2>/dev/null
-        fi
-        log_debug "Updated history file with new permissions: $(ls -l "$output_file")"
-    else
-        log_error "Failed to create history file - temp file empty"
-        rm -f "$temp_file"
-        return 1
-    fi
-
-    # Final permission verification
-    current_perms=$(stat -c "%a" "$output_file" 2>/dev/null)
-    log_debug "Final file permissions: $current_perms"
+    # Ensure proper permissions on the JSON file for web access
+    chmod 666 "$output_file" 2>/dev/null
     
     return 0
 }
 
 # Function to process 24-hour stats
 process_24hr_stats() {
-    if [ ! -f "$LOG_FILE" ]; then
-        log_warning "No log file found when processing 24hr stats"
-        return
-    fi
-
- cat > /tmp/process_stats.py << 'EOF'
+    # Create Python script to generate stats from SQLite
+    cat > /tmp/process_stats.py << 'EOF'
 import sys
-from datetime import datetime, timedelta
 import json
+import sqlite3
+from datetime import datetime, timedelta
 
-cutoff_time = datetime.now() - timedelta(hours=24)
-current_year = datetime.now().year
-
-temp_min, temp_max = float('inf'), float('-inf')
-util_min, util_max = float('inf'), float('-inf')
-mem_min, mem_max = float('inf'), float('-inf')
-power_min, power_max = float('inf'), float('-inf')
-
-for line in sys.stdin:
+def get_24hr_stats(db_path):
     try:
-        timestamp, temp, util, mem, power = line.strip().split(',')
-        dt = datetime.strptime(f"{current_year} {timestamp}", "%Y %m-%d %H:%M:%S")
+        # Connect to SQLite database
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
         
-        if dt >= cutoff_time:
-            temp = float(temp)
-            util = float(util)
-            mem = float(mem)
-            # Handle N/A power values
-            try:
-                power = float(power) if power.strip() != 'N/A' else 0
-            except (ValueError, AttributeError):
-                power = 0
-            
-            temp_min = min(temp_min, temp)
-            temp_max = max(temp_max, temp)
-            util_min = min(util_min, util)
-            util_max = max(util_max, util)
-            mem_min = min(mem_min, mem)
-            mem_max = max(mem_max, mem)
-            if power > 0:  # Only update power min/max if power is reported
-                power_min = min(power_min, power)
-                power_max = max(power_max, power)
-    except:
-        continue
+        # Calculate cutoff time (24 hours ago)
+        cutoff_time = int((datetime.now() - timedelta(hours=24)).timestamp())
+        
+        # Execute query to get min/max values
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT 
+                MIN(temperature) as temp_min,
+                MAX(temperature) as temp_max,
+                MIN(utilization) as util_min,
+                MAX(utilization) as util_max,
+                MIN(memory) as mem_min,
+                MAX(memory) as mem_max,
+                MIN(CASE WHEN power > 0 THEN power ELSE NULL END) as power_min,
+                MAX(power) as power_max
+            FROM gpu_metrics
+            WHERE timestamp_epoch > ?
+        ''', (cutoff_time,))
+        
+        row = cur.fetchone()
+        
+        # Handle case where no data was processed
+        if row['temp_min'] is None:
+            temp_min = temp_max = util_min = util_max = mem_min = mem_max = power_min = power_max = 0
+        else:
+            temp_min = row['temp_min']
+            temp_max = row['temp_max']
+            util_min = row['util_min']
+            util_max = row['util_max']
+            mem_min = row['mem_min']
+            mem_max = row['mem_max']
+            power_min = row['power_min'] if row['power_min'] is not None else 0
+            power_max = row['power_max'] if row['power_max'] is not None else 0
+        
+        # Create stats object
+        stats = {
+            "stats": {
+                "temperature": {"min": temp_min, "max": temp_max},
+                "utilization": {"min": util_min, "max": util_max},
+                "memory": {"min": mem_min, "max": mem_max},
+                "power": {"min": power_min, "max": power_max}
+            }
+        }
+        
+        return json.dumps(stats, indent=4)
+    except Exception as e:
+        print(f"Error processing 24hr stats: {e}", file=sys.stderr)
+        return json.dumps({"stats": {
+            "temperature": {"min": 0, "max": 0},
+            "utilization": {"min": 0, "max": 0},
+            "memory": {"min": 0, "max": 0},
+            "power": {"min": 0, "max": 0}
+        }})
+    finally:
+        if 'conn' in locals():
+            conn.close()
 
-# Handle case where no data was processed
-if temp_min == float('inf'):
-    temp_min = temp_max = util_min = util_max = mem_min = mem_max = 0
-
-# Special handling for power stats when not available
-if power_min == float('inf') or power_max == float('-inf'):
-    power_min = power_max = 0
-
-stats = {
-    "stats": {
-        "temperature": {"min": temp_min, "max": temp_max},
-        "utilization": {"min": util_min, "max": util_max},
-        "memory": {"min": mem_min, "max": mem_max},
-        "power": {"min": power_min, "max": power_max}
-    }
-}
-
-print(json.dumps(stats, indent=4))
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print(f"Usage: {sys.argv[0]} <db_path>", file=sys.stderr)
+        sys.exit(1)
+    
+    print(get_24hr_stats(sys.argv[1]))
 EOF
 
-    python3 /tmp/process_stats.py < "$LOG_FILE" > "$STATS_FILE"
+    # Run the Python script
+    python3 /tmp/process_stats.py "$DB_FILE" > "$STATS_FILE"
     chmod 666 "$STATS_FILE"
     rm /tmp/process_stats.py
 }
@@ -345,6 +340,30 @@ rotate_logs() {
     rotate_log_file "$ERROR_LOG"
     rotate_log_file "$WARNING_LOG"
     rotate_log_file "$LOG_FILE"
+}
+
+###############################################################################
+# clean_old_data: Purges old data from SQLite database
+# Ensures database doesn't grow indefinitely while maintaining performance
+###############################################################################
+function clean_old_data() {
+    log_debug "Cleaning old data from SQLite database"
+    
+    # Remove data older than 24 hours + 10 minutes (same retention policy as before)
+    local cutoff_time=$(( $(date +%s) - 86400 - 600 ))
+    
+    sqlite3 "$DB_FILE" <<EOF
+    DELETE FROM gpu_metrics WHERE timestamp_epoch < $cutoff_time;
+    VACUUM; -- Free up disk space and optimize
+EOF
+    
+    if [ $? -ne 0 ]; then
+        log_error "Failed to clean old data from database"
+        return 1
+    fi
+    
+    log_debug "Old data cleaned successfully"
+    return 0
 }
 
 ###############################################################################
@@ -398,12 +417,86 @@ function process_buffer() {
         # Clear original buffer only after successful copy
         > "$BUFFER_FILE"
         
-        # Append temp contents to log file
-        if cat "$temp_file" >> "$LOG_FILE"; then
+        # Process buffer with Python and write to database
+        cat > /tmp/process_buffer.py << 'PYTHONSCRIPT'
+import sys
+import sqlite3
+import time
+from datetime import datetime
+
+def process_buffer(db_path, buffer_lines):
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.execute('BEGIN TRANSACTION')
+        
+        # Prepare statement for insertion
+        stmt = '''
+            INSERT INTO gpu_metrics 
+            (timestamp, timestamp_epoch, temperature, utilization, memory, power)
+            VALUES (?, ?, ?, ?, ?, ?)
+        '''
+        
+        for line in buffer_lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            parts = line.split(',')
+            if len(parts) < 5:
+                continue
+                
+            timestamp = parts[0]
+            temperature = float(parts[1])
+            utilization = float(parts[2])
+            memory = float(parts[3])
+            
+            # Handle N/A power values
+            try:
+                power = float(parts[4]) if parts[4].strip() != 'N/A' else 0
+            except (ValueError, AttributeError):
+                power = 0
+            
+            # Calculate epoch time from timestamp (assuming current year)
+            current_year = datetime.now().year
+            dt = datetime.strptime(f"{current_year} {timestamp}", "%Y %m-%d %H:%M:%S")
+            timestamp_epoch = int(dt.timestamp())
+            
+            # Insert record
+            conn.execute(stmt, (timestamp, timestamp_epoch, temperature, utilization, memory, power))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error processing buffer: {e}", file=sys.stderr)
+        if 'conn' in locals():
+            conn.rollback()
+        return False
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print(f"Usage: {sys.argv[0]} <db_path>", file=sys.stderr)
+        sys.exit(1)
+        
+    buffer_lines = sys.stdin.readlines()
+    success = process_buffer(sys.argv[1], buffer_lines)
+    sys.exit(0 if success else 1)
+PYTHONSCRIPT
+
+        # Execute the script with buffer data
+        if cat "$temp_file" | python3 /tmp/process_buffer.py "$DB_FILE"; then
+            log_debug "Successfully processed buffer data into database"
             success=1
+            # Also append to log file for backup
+            cat "$temp_file" >> "$LOG_FILE"
         else
-            log_error "Failed to append buffer to log file"
+            log_error "Failed to process buffer into database"
         fi
+        
+        # Clean up
+        rm -f /tmp/process_buffer.py
     else
         log_error "Failed to create temp buffer file"
     fi
@@ -411,10 +504,8 @@ function process_buffer() {
     # Clean up temp file
     rm -f "$temp_file"
     
-    # If operation failed, try to restore buffer
-    if [ $success -eq 0 ]; then
-        cat "$temp_file" >> "$BUFFER_FILE"
-    fi
+    # Return result
+    return $((1 - success))
 }
 
 ###############################################################################
@@ -491,6 +582,9 @@ EOF
     fi
 }
 
+# Initialize the SQLite database before starting monitoring
+initialize_database
+
 # Start web server in background using Python server
 cd /app && python3 server.py &
 
@@ -526,6 +620,11 @@ while true; do
     # Hourly log rotation and nightly history cleanup
     if [ $(date +%M) -eq 0 ]; then
         rotate_logs
+        
+        # Clean old database data every hour to keep the DB lean
+        if [ $(date +%H) -eq 0 ]; then
+            clean_old_data
+        fi
     fi
     
     sleep $INTERVAL

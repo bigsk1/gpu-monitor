@@ -4,6 +4,7 @@ FROM python:3.13-slim
 RUN apt-get update && apt-get install -y \
     curl \
     jq \
+    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install aiohttp
