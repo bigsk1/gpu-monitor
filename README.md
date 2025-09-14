@@ -243,7 +243,7 @@ The dashboard is accessible at: [http://localhost:8081](http://localhost:8081)
 ![GPU Monitor Dashboard](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/a081bac1-e86f-4833-91ad-a1d64c994200/public)
 
 
-## Alternative Setup Method
+## Alternative Setup Methods
 
 A setup script is provided for convenience. It checks prerequisites and manages the service:
 
